@@ -1,0 +1,12 @@
+﻿asgiref==3.12.1
+Django==6.0.7
+djangorestframework==3.17.1
+djangorestframework-simplejwt==5.5.1
+drf-spectacular==0.28.0
+PyJWT==2.13.0
+razorpay==1.4.2
+sqlparse==0.5.5
+tzdata==2026.3
+Pillow
+setuptools<70
+firebase-admin>=6.5.0

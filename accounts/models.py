@@ -1,0 +1,281 @@
+import secrets
+import string
+
+from django.contrib.auth.models import AbstractUser
+from django.db import models
+
+
+class User(AbstractUser):
+    ROLE_CHOICES = (
+        ("customer", "Customer"),
+        ("delivery_boy", "Delivery Boy"),
+        ("admin", "Admin"),
+    )
+
+    GENDER_CHOICES = (
+        ("male", "Male"),
+        ("female", "Female"),
+        ("other", "Other"),
+    )
+
+    mobile_number = models.CharField(max_length=15, unique=True)
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default="customer")
+    referral_code = models.CharField(max_length=20, unique=True, blank=True, null=True)
+    referred_by = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="referrals",
+    )
+
+    email = models.EmailField(max_length=255, blank=True, default="")
+    profile_picture = models.ImageField(
+        upload_to="profile_pictures/", blank=True, null=True
+    )
+    date_of_birth = models.DateField(blank=True, null=True)
+    gender = models.CharField(
+        max_length=10, choices=GENDER_CHOICES, blank=True, default=""
+    )
+    wallet_balance = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+
+    class Meta:
+        verbose_name = "User"
+        verbose_name_plural = "Users"
+
+    def save(self, *args, **kwargs):
+        if self.role == "customer" and (
+            self.referral_code is None or not str(self.referral_code).strip()
+        ):
+            self.referral_code = self.generate_referral_code()
+        super().save(*args, **kwargs)
+
+    @staticmethod
+    def generate_referral_code():
+        while True:
+            code = "DD" + "".join(
+                secrets.choice(string.ascii_uppercase + string.digits) for _ in range(8)
+            )
+            if not User.objects.filter(referral_code=code).exists():
+                return code
+
+    @property
+    def profile_completion(self):
+        fields = {
+            "first_name": self.first_name,
+            "last_name": self.last_name,
+            "email": self.email,
+            "profile_picture": self.profile_picture,
+            "date_of_birth": self.date_of_birth,
+            "has_address": self.addresses.exists(),
+        }
+        filled = sum(1 for value in fields.values() if value)
+        total = len(fields)
+        return round((filled / total) * 100)
+
+    def __str__(self):
+        return f"{self.mobile_number} ({self.get_role_display()})"
+
+
+class DeliveryBoyProfile(models.Model):
+    user = models.OneToOneField(
+        User, on_delete=models.CASCADE, related_name="delivery_profile"
+    )
+    vehicle_number = models.CharField(max_length=20, blank=True, default="")
+    is_available = models.BooleanField(default=True)
+    zone = models.CharField(max_length=100, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Delivery Boy Profile"
+        verbose_name_plural = "Delivery Boy Profiles"
+
+    def __str__(self):
+        return f"{self.user.mobile_number} - {self.zone or 'No Zone'}"
+
+
+class Address(models.Model):
+    LABEL_CHOICES = (
+        ("home", "Home"),
+        ("work", "Work"),
+        ("other", "Other"),
+    )
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="addresses")
+    label = models.CharField(max_length=20, choices=LABEL_CHOICES, default="home")
+    house_number = models.CharField(max_length=50)
+    street = models.CharField(max_length=255)
+    area = models.CharField(max_length=255, blank=True, default="")
+    city = models.CharField(max_length=100)
+    state = models.CharField(max_length=100)
+    pincode = models.CharField(max_length=10)
+    country = models.CharField(max_length=50, default="India")
+    latitude = models.DecimalField(
+        max_digits=9, decimal_places=6, null=True, blank=True
+    )
+    longitude = models.DecimalField(
+        max_digits=9, decimal_places=6, null=True, blank=True
+    )
+    is_default = models.BooleanField(default=False)
+
+    class Meta:
+        verbose_name = "Address"
+        verbose_name_plural = "Addresses"
+        ordering = ["-is_default", "-created_at"]
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def save(self, *args, **kwargs):
+        if self.is_default:
+            Address.objects.filter(user=self.user, is_default=True).exclude(
+                pk=self.pk
+            ).update(is_default=False)
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.label}: {self.house_number}, {self.street}, {self.city}"
+
+
+class Notification(models.Model):
+    TYPE_CHOICES = (
+        ("subscription", "Subscription"),
+        ("payment", "Payment"),
+        ("referral", "Referral"),
+        ("general", "General"),
+    )
+
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="notifications"
+    )
+    title = models.CharField(max_length=255)
+    message = models.TextField()
+    notification_type = models.CharField(
+        max_length=20, choices=TYPE_CHOICES, default="general"
+    )
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Notification"
+        verbose_name_plural = "Notifications"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.user.mobile_number} - {self.title}"
+
+
+class OTP(models.Model):
+    mobile_number = models.CharField(max_length=15, db_index=True)
+    otp = models.CharField(max_length=6)
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_used = models.BooleanField(default=False)
+
+    class Meta:
+        verbose_name = "OTP"
+        verbose_name_plural = "OTPs"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.mobile_number} - {self.otp}"
+
+
+class Referral(models.Model):
+    STATUS_CHOICES = (
+        ("pending", "Pending"),
+        ("successful", "Successful"),
+        ("failed", "Failed"),
+    )
+
+    referrer = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="referrals_given"
+    )
+    referred_user = models.OneToOneField(
+        User, on_delete=models.CASCADE, related_name="referral_received"
+    )
+    referral_code = models.CharField(max_length=20)
+    status = models.CharField(
+        max_length=20, choices=STATUS_CHOICES, default="successful"
+    )
+    reward_amount = models.DecimalField(max_digits=10, decimal_places=2, default=50.00)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Referral"
+        verbose_name_plural = "Referrals"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.referrer.mobile_number} referred {self.referred_user.mobile_number} ({self.status})"
+
+
+class Wallet(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="wallet")
+    balance = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Wallet"
+        verbose_name_plural = "Wallets"
+
+    def __str__(self):
+        return f"Wallet for {self.user.mobile_number} - Balance: ₹{self.balance}"
+
+
+class WalletTransaction(models.Model):
+    TYPE_CHOICES = (
+        ("credit", "Credit"),
+        ("debit", "Debit"),
+    )
+
+    STATUS_CHOICES = (
+        ("pending", "Pending"),
+        ("success", "Success"),
+        ("failed", "Failed"),
+        ("refunded", "Refunded"),
+    )
+
+    wallet = models.ForeignKey(
+        Wallet, on_delete=models.CASCADE, related_name="transactions"
+    )
+    transaction_type = models.CharField(max_length=10, choices=TYPE_CHOICES)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default="pending")
+    razorpay_order_id = models.CharField(max_length=255, blank=True, db_index=True)
+    razorpay_payment_id = models.CharField(max_length=255, blank=True, db_index=True)
+    description = models.CharField(max_length=255, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Wallet Transaction"
+        verbose_name_plural = "Wallet Transactions"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.transaction_type.upper()} ₹{self.amount} ({self.status}) - {self.wallet.user.mobile_number}"
+
+
+class DeviceToken(models.Model):
+    PLATFORM_CHOICES = (
+        ("android", "Android"),
+        ("ios", "iOS"),
+        ("web", "Web"),
+    )
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="device_tokens")
+    token = models.CharField(max_length=255, unique=True, db_index=True)
+    platform = models.CharField(max_length=10, choices=PLATFORM_CHOICES, default="android")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Device Token"
+        verbose_name_plural = "Device Tokens"
+        ordering = ["-updated_at"]
+
+    def __str__(self):
+        return f"{self.user.mobile_number} - {self.platform} - {'Active' if self.is_active else 'Inactive'}"

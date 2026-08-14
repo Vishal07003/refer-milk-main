@@ -1,0 +1,33 @@
+# Django / Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+*.egg-info/
+.venv/
+venv/
+env/
+
+.pytest_cache/
+.mypy_cache/
+
+# Django Database & Media
+db.sqlite3
+*.log
+media/
+staticfiles/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Firebase Admin Secret
+firebase/dudhdairy-bc937-firebase-adminsdk-fbsvc-369669eefa.json
+firebase/*.json
+# IDE & OS
+.vscode/
+.idea/
+*.iml
+Thumbs.db
+Desktop.ini

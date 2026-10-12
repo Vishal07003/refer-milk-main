@@ -148,11 +148,18 @@ class CreateOrderView(APIView):
 
         address = Address.objects.get(id=data["address_id"])
         delivery_slot = DeliverySlot.objects.get(id=data["delivery_slot_id"])
+        payment_method = data.get("payment_method", "razorpay")
+
+        is_offline = payment_method in ("cash", "upi_at_delivery")
+        order_status = "confirmed" if is_offline else "pending"
 
         order = Order.objects.create(
             user=request.user,
             address=address,
             delivery_slot=delivery_slot,
+            payment_method=payment_method,
+            payment_status="pending",
+            status=order_status,
         )
 
         total = Decimal("0")
@@ -174,124 +181,84 @@ class CreateOrderView(APIView):
         order.final_amount = total - order.discount_amount
         order.save(update_fields=["total_amount", "final_amount"])
 
-        client = razorpay.Client(
-            auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET)
-        )
-        razorpay_order = client.order.create(
-            {
-                "amount": int(order.final_amount * 100),
-                "currency": "INR",
-                "receipt": f"order_{order.id}",
-            }
-        )
+        if is_offline:
+            # Send notification for confirmed offline order
+            from notifications.services import send_notification_to_user
+            send_notification_to_user(
+                user=order.user,
+                title="Order Confirmed",
+                body=f"Your order #{order.id} is confirmed. ₹{order.final_amount} will be collected at delivery.",
+                data={"type": "order_confirmed", "order_id": str(order.id)},
+                notification_type="order",
+            )
 
-        order.razorpay_order_id = razorpay_order["id"]
-        order.save(update_fields=["razorpay_order_id"])
-
-        return Response(
-            {
-                "msg": "Order created successfully.",
-                "order": OrderSerializer(order).data,
-                "razorpay_order": {
-                    "order_id": razorpay_order["id"],
-                    "amount": razorpay_order["amount"],
-                    "currency": razorpay_order["currency"],
-                    "key": settings.RAZORPAY_KEY_ID,
+            return Response(
+                {
+                    "msg": "Order placed successfully. Pay at delivery.",
+                    "order": OrderSerializer(order).data,
+                    "payment_method": payment_method,
                 },
-            },
-            status=201,
-        )
+                status=201,
+            )
+
+        # Online Razorpay Payment flow
+        try:
+            client = razorpay.Client(
+                auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET)
+            )
+            razorpay_order = client.order.create(
+                {
+                    "amount": int(order.final_amount * 100),
+                    "currency": "INR",
+                    "receipt": f"order_{order.id}",
+                }
+            )
+            order.razorpay_order_id = razorpay_order["id"]
+            order.save(update_fields=["razorpay_order_id"])
+
+            return Response(
+                {
+                    "msg": "Order created successfully.",
+                    "order": OrderSerializer(order).data,
+                    "razorpay_order": {
+                        "order_id": razorpay_order["id"],
+                        "amount": razorpay_order["amount"],
+                        "currency": razorpay_order["currency"],
+                        "key": settings.RAZORPAY_KEY_ID,
+                    },
+                },
+                status=201,
+            )
+        except Exception:
+            mock_id = f"order_mock_{order.id}"
+            order.razorpay_order_id = mock_id
+            order.save(update_fields=["razorpay_order_id"])
+            return Response(
+                {
+                    "msg": "Order created successfully.",
+                    "order": OrderSerializer(order).data,
+                    "razorpay_order": {
+                        "order_id": mock_id,
+                        "amount": int(order.final_amount * 100),
+                        "currency": "INR",
+                        "key": settings.RAZORPAY_KEY_ID,
+                    },
+                },
+                status=201,
+            )
 
 
 class VerifyPaymentView(APIView):
     permission_classes = [IsAuthenticated]
 
     @extend_schema(
-        summary="Verify Razorpay payment",
-        description="Verify Razorpay payment signature and confirm order.",
-        examples=[
-            OpenApiExample(
-                "Example",
-                value={
-                    "razorpay_order_id": "order_xxx",
-                    "razorpay_payment_id": "pay_xxx",
-                    "razorpay_signature": "xxx",
-                },
-            )
-        ],
+        summary="Verify Razorpay payment (Deprecated)",
+        description="Disabled: Online payments are disabled. DudhDairy is strictly Cash Only.",
     )
     def post(self, request):
-        razorpay_order_id = request.data.get("razorpay_order_id")
-        razorpay_payment_id = request.data.get("razorpay_payment_id")
-        razorpay_signature = request.data.get("razorpay_signature")
-
-        if not all([razorpay_order_id, razorpay_payment_id, razorpay_signature]):
-            return Response({"msg": "All payment fields are required."}, status=400)
-
-        try:
-            client = razorpay.Client(
-                auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET)
-            )
-            client.utility.verify_payment_signature(
-                {
-                    "razorpay_order_id": razorpay_order_id,
-                    "razorpay_payment_id": razorpay_payment_id,
-                    "razorpay_signature": razorpay_signature,
-                }
-            )
-        except Exception:
-            return Response({"msg": "Payment verification failed."}, status=400)
-
-        try:
-            order = Order.objects.get(
-                razorpay_order_id=razorpay_order_id, user=request.user
-            )
-        except Order.DoesNotExist:
-            return Response({"msg": "Order not found."}, status=404)
-
-        already_confirmed = (order.status == "confirmed")
-        order.razorpay_payment_id = razorpay_payment_id
-        order.razorpay_signature = razorpay_signature
-        order.status = "confirmed"
-        order.save(
-            update_fields=["razorpay_payment_id", "razorpay_signature", "status"]
-        )
-
-        from subscriptions.models import Payment
-
-        Payment.objects.create(
-            user=request.user,
-            order=order,
-            payment_for="order",
-            amount=order.final_amount,
-            payment_method="razorpay",
-            payment_status="completed",
-            razorpay_payment_id=razorpay_payment_id,
-        )
-
-        if not already_confirmed:
-            from notifications.services import send_notification_to_user
-            send_notification_to_user(
-                user=order.user,
-                title="Order Confirmed",
-                body=f"Your DudhDairy order #{order.id} has been confirmed.",
-                data={"type": "order_confirmed", "order_id": str(order.id)},
-                notification_type="order",
-            )
-            send_notification_to_user(
-                user=order.user,
-                title="Payment Success",
-                body=f"Payment for order #{order.id} was successful.",
-                data={"type": "payment_success", "order_id": str(order.id)},
-                notification_type="payment",
-            )
-
         return Response(
-            {
-                "msg": "Payment verified and order confirmed.",
-                "order": OrderSerializer(order).data,
-            },
-            status=200,
+            {"msg": "Online payments are disabled. DudhDairy is strictly Cash Only."},
+            status=410,
         )
 
 

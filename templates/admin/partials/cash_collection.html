@@ -1,0 +1,61 @@
+<!-- SECTION 2: ORDER CASH COLLECTIONS (Audit Trail & Inspection) -->
+      <div id="content-offline-payments" class="space-y-4 hidden">
+        <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 class="text-base font-bold text-slate-900">Individual Order Cash Collections (Audit Log)</h3>
+              <p class="text-xs text-slate-500">Auto-saved upon delivery. Inspect individual drops here when investigating partner discrepancies.</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="exportCollectionsCSV()" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-semibold transition">
+                <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                <span>Export Audit CSV</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Filter Controls -->
+          <div class="flex flex-wrap items-center justify-between gap-3 pt-2">
+            <div class="flex flex-wrap items-center gap-2">
+              <div class="inline-flex rounded-xl bg-slate-100 p-1">
+                <button onclick="filterStatus('all')" id="filter-status-all" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white text-slate-800 shadow-xs">All Records</button>
+                <button onclick="filterStatus('collected')" id="filter-status-collected" class="px-3 py-1.5 text-xs font-medium rounded-lg text-slate-600 hover:text-slate-900">Auto-Collected</button>
+                <button onclick="filterStatus('verified')" id="filter-status-verified" class="px-3 py-1.5 text-xs font-medium rounded-lg text-slate-600 hover:text-slate-900">Verified</button>
+              </div>
+
+              <div class="inline-flex items-center px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold">
+                <i data-lucide="banknote" class="w-3.5 h-3.5 mr-1.5"></i>
+                <span>Strictly Cash-Only</span>
+              </div>
+            </div>
+
+            <div class="search-input-wrapper w-full sm:w-64">
+              <i data-lucide="search" class="search-icon"></i>
+              <input type="text" id="collections-search" oninput="debounceSearch()" placeholder="Search Order #, Partner, Customer..." />
+            </div>
+          </div>
+
+          <!-- Table -->
+          <div class="overflow-x-auto rounded-xl border border-slate-200">
+            <table class="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold uppercase tracking-wider text-[11px]">
+                  <th class="py-3 px-4">Collection ID & Order</th>
+                  <th class="py-3 px-4">Delivery Partner</th>
+                  <th class="py-3 px-4">Customer</th>
+                  <th class="py-3 px-4">Exact Cash Collected</th>
+                  <th class="py-3 px-4">Delivered & Collected Time</th>
+                  <th class="py-3 px-4">Collection Status</th>
+                  <th class="py-3 px-4">Audit Details</th>
+                  <th class="py-3 px-4 text-right">Inspection</th>
+                </tr>
+              </thead>
+              <tbody id="collections-table-body" class="divide-y divide-slate-100">
+                <tr>
+                  <td colspan="8" class="text-center py-8 text-slate-400">Loading cash collections...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>

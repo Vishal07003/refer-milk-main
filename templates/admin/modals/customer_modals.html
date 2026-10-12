@@ -1,0 +1,321 @@
+<!-- MODAL: Add New Customer -->
+  <div id="create-customer-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 hidden">
+    <div class="modal-dialog max-w-lg w-full p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-8 h-8 rounded-xl bg-brand-surface text-brand flex items-center justify-center">
+            <i data-lucide="user-plus" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-slate-900">Add New Customer</h3>
+            <p class="text-[11px] text-slate-500">Create customer profile with delivery address and OTP access.</p>
+          </div>
+        </div>
+        <button onclick="closeCreateCustomerModal()" class="modal-close-btn">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">First Name *</label>
+            <input type="text" id="cust-fname" placeholder="First Name" class="admin-input" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Last Name</label>
+            <input type="text" id="cust-lname" placeholder="Last Name" class="admin-input" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Mobile Number *</label>
+            <input type="tel" id="cust-mobile" placeholder="10-digit Mobile" class="admin-input font-mono" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Email (Optional)</label>
+            <input type="email" id="cust-email" placeholder="customer@example.com" class="admin-input" />
+          </div>
+        </div>
+
+        <div class="border-t border-slate-100 pt-2 space-y-2">
+          <p class="text-[11px] font-bold text-slate-600 uppercase tracking-wider">Delivery Address Details</p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">House / Flat No *</label>
+              <input type="text" id="cust-house" placeholder="e.g. Flat 204 / House 12" class="admin-input" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Street / Building *</label>
+              <input type="text" id="cust-street" placeholder="e.g. Shivaji Road, Near Mandir" class="admin-input" />
+            </div>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Area / Locality</label>
+              <input type="text" id="cust-area" placeholder="e.g. Sangola Central" class="admin-input" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">City</label>
+              <input type="text" id="cust-city" value="Sangola" class="admin-input" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Pincode</label>
+              <input type="text" id="cust-pincode" value="413307" class="admin-input font-mono" />
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center space-x-2 pt-1">
+          <input type="checkbox" id="cust-active" checked class="rounded border-slate-300 text-brand" />
+          <label for="cust-active" class="text-xs text-slate-700 font-medium cursor-pointer">Account Status: Active (Can subscribe & place cash orders)</label>
+        </div>
+      </div>
+
+      <div class="flex items-center space-x-2 pt-3 border-t border-slate-100">
+        <button onclick="submitCreateCustomer()" class="flex-1 bg-brand hover:bg-brand-dark text-white font-bold py-2.5 px-4 rounded-xl transition text-xs shadow-xs flex items-center justify-center space-x-1.5">
+          <i data-lucide="check" class="w-4 h-4"></i>
+          <span>Save Customer</span>
+        </button>
+        <button onclick="closeCreateCustomerModal()" class="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold transition">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+
+<!-- MODAL: Edit Customer Profile -->
+  <div id="edit-customer-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 hidden">
+    <div class="modal-dialog max-w-lg w-full p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+            <i data-lucide="edit-3" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-slate-900">Edit Customer Profile</h3>
+            <p class="text-[11px] text-slate-500">Update personal info, address, and account status.</p>
+          </div>
+        </div>
+        <button onclick="closeEditCustomerModal()" class="modal-close-btn">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <input type="hidden" id="edit-cust-id" />
+
+      <div class="space-y-3">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">First Name *</label>
+            <input type="text" id="edit-cust-fname" class="admin-input" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Last Name</label>
+            <input type="text" id="edit-cust-lname" class="admin-input" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Mobile (Read-only)</label>
+            <input type="text" id="edit-cust-mobile" readonly class="admin-input bg-slate-50 text-slate-500 font-mono cursor-not-allowed" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Email</label>
+            <input type="email" id="edit-cust-email" class="admin-input" />
+          </div>
+        </div>
+
+        <div class="border-t border-slate-100 pt-2 space-y-2">
+          <p class="text-[11px] font-bold text-slate-600 uppercase tracking-wider">Delivery Address</p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">House / Flat No</label>
+              <input type="text" id="edit-cust-house" class="admin-input" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Street / Landmark</label>
+              <input type="text" id="edit-cust-street" class="admin-input" />
+            </div>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Area / Locality</label>
+              <input type="text" id="edit-cust-area" class="admin-input" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">City</label>
+              <input type="text" id="edit-cust-city" class="admin-input" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">Pincode</label>
+              <input type="text" id="edit-cust-pincode" class="admin-input font-mono" />
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center space-x-2 pt-1">
+          <input type="checkbox" id="edit-cust-active" class="rounded border-slate-300 text-brand" />
+          <label for="edit-cust-active" class="text-xs text-slate-700 font-medium cursor-pointer">Account Active</label>
+        </div>
+      </div>
+
+      <div class="flex items-center space-x-2 pt-3 border-t border-slate-100">
+        <button onclick="submitEditCustomer()" class="flex-1 bg-brand hover:bg-brand-dark text-white font-bold py-2.5 px-4 rounded-xl transition text-xs shadow-xs flex items-center justify-center space-x-1.5">
+          <i data-lucide="save" class="w-4 h-4"></i>
+          <span>Save Changes</span>
+        </button>
+        <button onclick="closeEditCustomerModal()" class="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold transition">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+
+<!-- MODAL: Customer 360 Details -->
+  <div id="customer-details-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 hidden">
+    <div class="modal-dialog max-w-3xl w-full p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center space-x-3">
+          <div class="w-10 h-10 rounded-full bg-brand-surface text-brand font-bold flex items-center justify-center text-sm shadow-xs" id="detail-cust-avatar">
+            CU
+          </div>
+          <div>
+            <div class="flex items-center space-x-2">
+              <h3 class="text-base font-bold text-slate-900" id="detail-cust-name">—</h3>
+              <span id="detail-cust-status" class="px-2 py-0.5 rounded-full text-[10px] font-bold">—</span>
+            </div>
+            <p class="text-xs text-slate-500 font-mono" id="detail-cust-mobile">—</p>
+          </div>
+        </div>
+        <button onclick="closeCustomerDetailsModal()" class="modal-close-btn">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <!-- Quick KPI summary for Customer -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div class="p-3 rounded-xl bg-slate-50 border border-slate-100">
+          <p class="text-[11px] text-slate-500 font-semibold">Referral Code</p>
+          <p class="text-sm font-bold text-brand font-mono" id="detail-cust-ref">—</p>
+        </div>
+        <div class="p-3 rounded-xl bg-slate-50 border border-slate-100">
+          <p class="text-[11px] text-slate-500 font-semibold">Total Orders</p>
+          <p class="text-sm font-bold text-slate-900" id="detail-cust-orders-count">0</p>
+        </div>
+        <div class="p-3 rounded-xl bg-slate-50 border border-slate-100">
+          <p class="text-[11px] text-slate-500 font-semibold">Total Spent (Delivered)</p>
+          <p class="text-sm font-bold text-emerald-700" id="detail-cust-spent">₹0.00</p>
+        </div>
+        <div class="p-3 rounded-xl bg-slate-50 border border-slate-100">
+          <p class="text-[11px] text-slate-500 font-semibold">Joined Date</p>
+          <p class="text-xs font-semibold text-slate-700 mt-0.5" id="detail-cust-joined">—</p>
+        </div>
+      </div>
+
+      <!-- Detail Tabs: Addresses, Orders, Subscriptions, Referrals, Payments -->
+      <div class="space-y-4">
+        <!-- Delivery Addresses -->
+        <div class="border border-slate-100 rounded-xl p-3 bg-slate-50/50">
+          <h4 class="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2 flex items-center space-x-1.5">
+            <i data-lucide="map-pin" class="w-3.5 h-3.5 text-brand"></i>
+            <span>Delivery Addresses</span>
+          </h4>
+          <div id="detail-cust-addresses" class="space-y-1.5 text-xs text-slate-700">
+            <p class="text-slate-400">Loading addresses...</p>
+          </div>
+        </div>
+
+        <!-- Order History -->
+        <div class="border border-slate-100 rounded-xl p-3">
+          <h4 class="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2 flex items-center space-x-1.5">
+            <i data-lucide="shopping-bag" class="w-3.5 h-3.5 text-brand"></i>
+            <span>Order History</span>
+          </h4>
+          <div class="overflow-x-auto max-h-48 overflow-y-auto">
+            <table class="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr class="text-[11px] text-slate-400 border-b border-slate-100">
+                  <th class="py-1.5 px-2">Order</th>
+                  <th class="py-1.5 px-2">Items</th>
+                  <th class="py-1.5 px-2">Amount</th>
+                  <th class="py-1.5 px-2">Status</th>
+                  <th class="py-1.5 px-2">Date</th>
+                </tr>
+              </thead>
+              <tbody id="detail-cust-orders" class="divide-y divide-slate-100">
+                <tr><td colspan="5" class="py-3 text-center text-slate-400">No orders recorded</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Subscriptions -->
+        <div class="border border-slate-100 rounded-xl p-3">
+          <h4 class="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2 flex items-center space-x-1.5">
+            <i data-lucide="calendar" class="w-3.5 h-3.5 text-brand"></i>
+            <span>Daily Subscriptions</span>
+          </h4>
+          <div class="overflow-x-auto max-h-40 overflow-y-auto">
+            <table class="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr class="text-[11px] text-slate-400 border-b border-slate-100">
+                  <th class="py-1.5 px-2">Plan #</th>
+                  <th class="py-1.5 px-2">Product & Quantity</th>
+                  <th class="py-1.5 px-2">Slot</th>
+                  <th class="py-1.5 px-2">Partner</th>
+                  <th class="py-1.5 px-2">Status</th>
+                </tr>
+              </thead>
+              <tbody id="detail-cust-subs" class="divide-y divide-slate-100">
+                <tr><td colspan="5" class="py-3 text-center text-slate-400">No subscriptions</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Cash Collections & Payments -->
+        <div class="border border-slate-100 rounded-xl p-3">
+          <h4 class="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2 flex items-center space-x-1.5">
+            <i data-lucide="banknote" class="w-3.5 h-3.5 text-brand"></i>
+            <span>Cash Collections History (Cash Only)</span>
+          </h4>
+          <div class="overflow-x-auto max-h-40 overflow-y-auto">
+            <table class="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr class="text-[11px] text-slate-400 border-b border-slate-100">
+                  <th class="py-1.5 px-2">Collection #</th>
+                  <th class="py-1.5 px-2">Order #</th>
+                  <th class="py-1.5 px-2">Amount</th>
+                  <th class="py-1.5 px-2">Collected By</th>
+                  <th class="py-1.5 px-2">Status</th>
+                </tr>
+              </thead>
+              <tbody id="detail-cust-collections" class="divide-y divide-slate-100">
+                <tr><td colspan="5" class="py-3 text-center text-slate-400">No collections</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Referral History -->
+        <div class="border border-slate-100 rounded-xl p-3">
+          <h4 class="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2 flex items-center space-x-1.5">
+            <i data-lucide="share-2" class="w-3.5 h-3.5 text-brand"></i>
+            <span>Referrals Given</span>
+          </h4>
+          <div id="detail-cust-referrals" class="text-xs text-slate-600 space-y-1">
+            <p class="text-slate-400">No referrals made</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="pt-3 border-t border-slate-100 text-right">
+        <button onclick="closeCustomerDetailsModal()" class="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold transition">
+          Close
+        </button>
+      </div>
+    </div>
+  </div>

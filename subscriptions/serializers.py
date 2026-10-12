@@ -10,7 +10,21 @@ from orders.models import DeliverySlot
 from orders.serializers import DeliverySlotSerializer
 from products.models import Product
 
-from .models import Payment, ReferralDiscountTier, Subscription
+from .models import Payment, ReferralDiscountTier, Subscription, SubscriptionPlan
+
+
+class SubscriptionPlanSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source='product.name', read_only=True)
+    product_price = serializers.DecimalField(source='product.price', max_digits=10, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = SubscriptionPlan
+        fields = (
+            'id', 'name', 'product', 'product_name', 'product_price',
+            'quantity', 'unit', 'frequency', 'price_per_unit',
+            'schedule_description', 'is_active', 'created_at', 'updated_at'
+        )
+        read_only_fields = ('id', 'created_at', 'updated_at')
 
 
 class ReferralDiscountTierSerializer(serializers.ModelSerializer):
@@ -21,10 +35,15 @@ class ReferralDiscountTierSerializer(serializers.ModelSerializer):
 
 
 class SubscriptionSerializer(serializers.ModelSerializer):
+    plan_name = serializers.CharField(source='plan.name', read_only=True, default='')
     address_detail = AddressSerializer(source='address', read_only=True)
     delivery_slot_detail = DeliverySlotSerializer(source='delivery_slot', read_only=True)
     product_name = serializers.CharField(source='product.name', read_only=True)
     product_unit = serializers.CharField(source='product.get_unit_display', read_only=True)
+    delivery_boy_name = serializers.SerializerMethodField()
+    delivery_boy_mobile = serializers.CharField(source='delivery_boy.mobile_number', read_only=True, default='')
+    customer_name = serializers.SerializerMethodField()
+    customer_mobile = serializers.CharField(source='user.mobile_number', read_only=True, default='')
     days_used = serializers.IntegerField(read_only=True)
     days_remaining = serializers.IntegerField(read_only=True)
     amount_used = serializers.DecimalField(max_digits=12, decimal_places=2, read_only=True)
@@ -33,8 +52,10 @@ class SubscriptionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Subscription
         fields = (
-            'id', 'user', 'product', 'product_name', 'product_unit',
+            'id', 'plan', 'plan_name', 'user', 'customer_name', 'customer_mobile',
+            'product', 'product_name', 'product_unit',
             'address', 'address_detail', 'delivery_slot', 'delivery_slot_detail',
+            'delivery_boy', 'delivery_boy_name', 'delivery_boy_mobile',
             'quantity', 'start_date', 'end_date',
             'price_per_unit', 'discount_per_unit', 'final_price_per_unit',
             'total_amount', 'status', 'cancelled_at',
@@ -46,6 +67,80 @@ class SubscriptionSerializer(serializers.ModelSerializer):
             'final_price_per_unit', 'total_amount', 'cancelled_at',
             'created_at', 'updated_at',
         )
+
+    def get_delivery_boy_name(self, obj):
+        if obj.delivery_boy:
+            name = f"{obj.delivery_boy.first_name} {obj.delivery_boy.last_name}".strip()
+            return name or obj.delivery_boy.username or obj.delivery_boy.mobile_number
+        return ""
+
+    def get_customer_name(self, obj):
+        if obj.user:
+            name = f"{obj.user.first_name} {obj.user.last_name}".strip()
+            return name or obj.user.username or obj.user.mobile_number
+        return ""
+
+
+class RequestCustomerSubscriptionSerializer(serializers.Serializer):
+    """
+    Customer requests a subscription linked to an active predefined plan.
+    Strictly creates status='pending' (pending approval). Customer cannot activate or set price.
+    """
+    plan_id = serializers.IntegerField()
+    address_id = serializers.IntegerField()
+    delivery_slot_id = serializers.IntegerField(required=False, allow_null=True)
+    start_date = serializers.DateField(required=False)
+    notes = serializers.CharField(required=False, allow_blank=True, default='')
+
+    def validate_plan_id(self, value):
+        try:
+            plan = SubscriptionPlan.objects.get(id=value, is_active=True)
+        except SubscriptionPlan.DoesNotExist:
+            raise serializers.ValidationError("Subscription plan not found or currently inactive.")
+        return value
+
+    def validate_address_id(self, value):
+        user = self.context['request'].user
+        try:
+            address = Address.objects.get(id=value, user=user)
+        except Address.DoesNotExist:
+            raise serializers.ValidationError("Delivery address not found.")
+        return value
+
+    def validate_delivery_slot_id(self, value):
+        if value is None:
+            return value
+        try:
+            DeliverySlot.objects.get(id=value)
+        except DeliverySlot.DoesNotExist:
+            raise serializers.ValidationError("Delivery slot not found.")
+        return value
+
+
+class UpdateCustomerSubscriptionSerializer(serializers.Serializer):
+    """
+    Customer updates their existing subscription delivery slot, quantity, or address.
+    """
+    delivery_slot_id = serializers.IntegerField(required=False, allow_null=True)
+    quantity = serializers.DecimalField(max_digits=10, decimal_places=2, min_value=Decimal('0.1'), required=False)
+    address_id = serializers.IntegerField(required=False)
+
+    def validate_delivery_slot_id(self, value):
+        if value is None:
+            return value
+        try:
+            DeliverySlot.objects.get(id=value, is_active=True)
+        except DeliverySlot.DoesNotExist:
+            raise serializers.ValidationError("Delivery slot not found or inactive.")
+        return value
+
+    def validate_address_id(self, value):
+        user = self.context['request'].user
+        try:
+            Address.objects.get(id=value, user=user)
+        except Address.DoesNotExist:
+            raise serializers.ValidationError("Delivery address not found.")
+        return value
 
 
 class CreateSubscriptionSerializer(serializers.Serializer):
@@ -178,3 +273,40 @@ class CreatePaymentSerializer(serializers.Serializer):
 class CancelSubscriptionSerializer(serializers.Serializer):
     payment_method = serializers.ChoiceField(choices=Payment.METHOD_CHOICES, required=False)
     transaction_id = serializers.CharField(max_length=255, required=False, allow_blank=True)
+
+
+class CustomerDeliveryItemSerializer(serializers.Serializer):
+    id = serializers.IntegerField(required=False)
+    delivery_date = serializers.DateField()
+    status = serializers.CharField()
+    status_display = serializers.CharField()
+    delivered_at = serializers.DateTimeField(allow_null=True)
+    notes = serializers.CharField(allow_blank=True)
+    product_name = serializers.CharField()
+    quantity = serializers.DecimalField(max_digits=10, decimal_places=2)
+    unit = serializers.CharField()
+    delivery_boy_name = serializers.CharField(allow_blank=True)
+
+
+class CustomerSubscriptionBillSerializer(serializers.Serializer):
+    subscription_id = serializers.IntegerField()
+    product_name = serializers.CharField()
+    quantity_per_day = serializers.DecimalField(max_digits=10, decimal_places=2)
+    unit = serializers.CharField()
+    rate_per_unit = serializers.DecimalField(max_digits=10, decimal_places=2)
+    discount_per_unit = serializers.DecimalField(max_digits=10, decimal_places=2)
+    final_rate_per_unit = serializers.DecimalField(max_digits=10, decimal_places=2)
+    start_date = serializers.DateField()
+    end_date = serializers.DateField()
+    subscription_status = serializers.CharField()
+    total_scheduled_drops = serializers.IntegerField()
+    delivered_drops_count = serializers.IntegerField()
+    delivered_volume = serializers.DecimalField(max_digits=10, decimal_places=2)
+    failed_drops_count = serializers.IntegerField()
+    pending_future_drops_count = serializers.IntegerField()
+    delivered_subtotal = serializers.DecimalField(max_digits=12, decimal_places=2)
+    discount_total = serializers.DecimalField(max_digits=12, decimal_places=2)
+    amount_payable = serializers.DecimalField(max_digits=12, decimal_places=2)
+    payment_status = serializers.CharField()
+    delivery_breakdown = serializers.ListField(child=CustomerDeliveryItemSerializer(), required=False)
+

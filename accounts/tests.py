@@ -1,8 +1,10 @@
-from django.test import TestCase
+from unittest.mock import patch, MagicMock
+from decimal import Decimal
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from rest_framework.test import APIClient
 from rest_framework import status
-from accounts.models import User, Referral
+from accounts.models import User, Referral, OTP
 
 
 class ReferralSystemTests(TestCase):
@@ -298,3 +300,114 @@ class WalletSystemTests(TestCase):
         self.assertEqual(response.data.get("total"), 1)
         self.assertEqual(len(response.data.get("payments")), 1)
         self.assertEqual(response.data.get("total_paid"), "250.00")
+
+
+class TwoFactorSMSOTPTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.send_otp_url = reverse("accounts:send-otp")
+        self.verify_otp_url = reverse("accounts:verify-otp")
+
+    @override_settings(TWOFACTOR_API_KEY="test_mock_api_key_12345", TWOFACTOR_OTP_TEMPLATE_NAME="")
+    @patch("requests.get")
+    def test_send_otp_success_with_mocked_2factor_provider(self, mock_requests_get):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "Status": "Success",
+            "Details": "test-session-uuid-1234-5678",
+        }
+        mock_requests_get.return_value = mock_response
+
+        response = self.client.post(self.send_otp_url, {"mobile_number": "9876543210"})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data.get("msg"), "OTP sent successfully via SMS.")
+
+        # Ensure requests.get was invoked with 2Factor API V1 format
+        self.assertTrue(mock_requests_get.called)
+        called_url = mock_requests_get.call_args[0][0]
+        self.assertIn("https://2factor.in/API/V1/test_mock_api_key_12345/SMS/919876543210/", called_url)
+
+        # Check that OTP record was created in the database
+        otp_record = OTP.objects.filter(mobile_number="9876543210", is_used=False).first()
+        self.assertIsNotNone(otp_record)
+        self.assertEqual(len(otp_record.otp), 6)
+
+    @override_settings(TWOFACTOR_API_KEY="test_mock_api_key_12345", TWOFACTOR_OTP_TEMPLATE_NAME="DairyLoginOTP")
+    @patch("requests.get")
+    def test_send_otp_with_custom_template_name(self, mock_requests_get):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "Status": "Success",
+            "Details": "test-session-uuid-custom-template",
+        }
+        mock_requests_get.return_value = mock_response
+
+        response = self.client.post(self.send_otp_url, {"mobile_number": "9876543210"})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        called_url = mock_requests_get.call_args[0][0]
+        self.assertTrue(called_url.endswith("/DairyLoginOTP"))
+
+    @override_settings(TWOFACTOR_API_KEY="test_mock_api_key_12345")
+    @patch("requests.get")
+    def test_send_otp_provider_rejection_returns_400(self, mock_requests_get):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "Status": "Error",
+            "Details": "Insufficient SMS balance",
+        }
+        mock_requests_get.return_value = mock_response
+
+        response = self.client.post(self.send_otp_url, {"mobile_number": "9876543210"})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Insufficient SMS balance", response.data.get("error"))
+
+    @override_settings(TWOFACTOR_API_KEY="test_mock_api_key_12345")
+    @patch("requests.get")
+    def test_send_otp_gateway_timeout_handles_safely(self, mock_requests_get):
+        import requests
+        mock_requests_get.side_effect = requests.exceptions.Timeout("Connection timed out")
+
+        response = self.client.post(self.send_otp_url, {"mobile_number": "9876543210"})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("timed out", response.data.get("error").lower())
+
+    @override_settings(TWOFACTOR_API_KEY="test_mock_api_key_12345")
+    @patch("requests.get")
+    def test_send_and_verify_otp_end_to_end_jwt_login(self, mock_requests_get):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "Status": "Success",
+            "Details": "session-e2e-ok",
+        }
+        mock_requests_get.return_value = mock_response
+
+        # 1. Send OTP
+        send_res = self.client.post(self.send_otp_url, {"mobile_number": "9123456789"})
+        self.assertEqual(send_res.status_code, status.HTTP_200_OK)
+
+        otp_record = OTP.objects.get(mobile_number="9123456789", is_used=False)
+
+        # 2. Verify OTP with correct code
+        verify_res = self.client.post(
+            self.verify_otp_url,
+            {"mobile_number": "9123456789", "otp": otp_record.otp},
+        )
+        self.assertEqual(verify_res.status_code, status.HTTP_200_OK)
+        self.assertIn("access", verify_res.data)
+        self.assertIn("refresh", verify_res.data)
+        self.assertEqual(verify_res.data["user"]["mobile_number"], "9123456789")
+
+        # Verify OTP is marked used
+        otp_record.refresh_from_db()
+        self.assertTrue(otp_record.is_used)
+
+        # 3. Trying to reuse same OTP fails
+        reuse_res = self.client.post(
+            self.verify_otp_url,
+            {"mobile_number": "9123456789", "otp": otp_record.otp},
+        )
+        self.assertEqual(reuse_res.status_code, status.HTTP_400_BAD_REQUEST)

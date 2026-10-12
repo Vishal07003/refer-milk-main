@@ -1,6 +1,7 @@
 from django.urls import path
 
 from .views import (
+    ActiveSubscriptionPlansListView,
     AdminCreateSubscriptionView,
     CancelSubscriptionPreviewView,
     CancelSubscriptionView,
@@ -8,8 +9,13 @@ from .views import (
     MySubscriptionsView,
     PaymentDetailView,
     PaymentHistoryView,
+    PauseCustomerSubscriptionView,
+    ResumeCustomerSubscriptionView,
+    CustomerSubscriptionBillsView,
+    CustomerSubscriptionDeliveriesView,
     ReferralDiscountTierDetailView,
     ReferralDiscountTierListView,
+    RequestCustomerSubscriptionView,
     SubscriptionDetailView,
     VerifySubscriptionPaymentView,
     WalletAddMoneyView,
@@ -21,14 +27,20 @@ from .views import (
 app_name = 'subscriptions'
 
 urlpatterns = [
+    path('plans/', ActiveSubscriptionPlansListView.as_view(), name='active-subscription-plans'),
+    path('request/', RequestCustomerSubscriptionView.as_view(), name='customer-request-subscription'),
     path('discount-tiers/', ReferralDiscountTierListView.as_view(), name='discount-tier-list'),
     path('discount-tiers/create/', ReferralDiscountTierDetailView.as_view(), name='discount-tier-create'),
     path('discount-tiers/<int:pk>/', ReferralDiscountTierDetailView.as_view(), name='discount-tier-detail'),
     path('create/', CreateSubscriptionView.as_view(), name='create-subscription'),
     path('verify-payment/', VerifySubscriptionPaymentView.as_view(), name='verify-subscription-payment'),
     path('my/', MySubscriptionsView.as_view(), name='my-subscriptions'),
+    path('bills/', CustomerSubscriptionBillsView.as_view(), name='customer-subscription-bills'),
     path('admin-create/', AdminCreateSubscriptionView.as_view(), name='admin-create-subscription'),
     path('<int:pk>/', SubscriptionDetailView.as_view(), name='subscription-detail'),
+    path('<int:pk>/deliveries/', CustomerSubscriptionDeliveriesView.as_view(), name='customer-subscription-deliveries'),
+    path('<int:pk>/pause/', PauseCustomerSubscriptionView.as_view(), name='pause-subscription'),
+    path('<int:pk>/resume/', ResumeCustomerSubscriptionView.as_view(), name='resume-subscription'),
     path('<int:pk>/cancel-preview/', CancelSubscriptionPreviewView.as_view(), name='cancel-preview'),
     path('<int:pk>/cancel/', CancelSubscriptionView.as_view(), name='cancel-subscription'),
     path('payments/', PaymentHistoryView.as_view(), name='payment-history'),
@@ -38,3 +50,4 @@ urlpatterns = [
     path('wallet/verify/', WalletVerifyPaymentView.as_view(), name='wallet-verify-payment'),
     path('wallet/transactions/', WalletTransactionsView.as_view(), name='wallet-transactions'),
 ]
+

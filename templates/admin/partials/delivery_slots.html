@@ -1,0 +1,54 @@
+<!-- SECTION 6A-2: DELIVERY SLOTS -->
+<div id="content-delivery-slots" class="space-y-4 hidden">
+  <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-4">
+    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div>
+        <h3 class="text-base font-bold text-slate-900">Delivery Time Slots</h3>
+        <p class="text-xs text-slate-500">Manage time windows for morning/evening customer orders & subscriptions. Active slots appear at checkout.</p>
+      </div>
+      <button onclick="openCreateSlotModal()" class="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-brand hover:bg-brand-dark text-white text-xs font-semibold transition shadow-xs">
+        <i data-lucide="plus-circle" class="w-4 h-4"></i>
+        <span>Add Delivery Slot</span>
+      </button>
+    </div>
+
+    <!-- Filter & Search Toolbar -->
+    <div class="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-100">
+      <div class="flex items-center space-x-2">
+        <span class="text-xs font-semibold text-slate-500">Filter Status:</span>
+        <div class="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-50 text-xs">
+          <button onclick="filterSlotStatus('all')" id="slot-filter-all" class="px-2.5 py-1 rounded-md font-semibold bg-white text-slate-900 shadow-xs transition">All</button>
+          <button onclick="filterSlotStatus('active')" id="slot-filter-active" class="px-2.5 py-1 rounded-md font-medium text-slate-600 hover:text-slate-900 transition">Active (In-App)</button>
+          <button onclick="filterSlotStatus('inactive')" id="slot-filter-inactive" class="px-2.5 py-1 rounded-md font-medium text-slate-600 hover:text-slate-900 transition">Deactivated</button>
+        </div>
+      </div>
+      <div class="search-input-wrapper w-full sm:w-64">
+        <i data-lucide="search" class="search-icon"></i>
+        <input type="text" id="slot-search-input" onkeyup="debounceSlotSearch()" placeholder="Search slot name..." />
+      </div>
+    </div>
+
+    <!-- Slots Table -->
+    <div class="overflow-x-auto rounded-xl border border-slate-200">
+      <table class="w-full text-left border-collapse text-xs">
+        <thead>
+          <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold uppercase tracking-wider text-[11px]">
+            <th class="py-3 px-4">Slot ID</th>
+            <th class="py-3 px-4">Slot Name</th>
+            <th class="py-3 px-4">Time Window</th>
+            <th class="py-3 px-4">Duration</th>
+            <th class="py-3 px-4">Orders Attached</th>
+            <th class="py-3 px-4">Subscriptions</th>
+            <th class="py-3 px-4">In-App Status</th>
+            <th class="py-3 px-4 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="delivery-slots-table-body" class="divide-y divide-slate-100">
+          <tr>
+            <td colspan="8" class="text-center py-8 text-slate-400">Loading delivery slots...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

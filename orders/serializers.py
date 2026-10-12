@@ -5,7 +5,7 @@ from rest_framework import serializers
 from accounts.models import Address
 from products.models import Product
 
-from .models import DeliverySlot, Order, OrderItem
+from .models import DeliverySlot, Order, OrderItem, OfflinePaymentCollection
 
 
 class DeliverySlotSerializer(serializers.ModelSerializer):
@@ -24,6 +24,33 @@ class OrderItemSerializer(serializers.ModelSerializer):
         read_only_fields = ('id', 'total')
 
 
+class OfflinePaymentCollectionSerializer(serializers.ModelSerializer):
+    delivery_partner_name = serializers.SerializerMethodField()
+    delivery_partner_mobile = serializers.CharField(source='delivery_partner.mobile_number', read_only=True)
+    order_id = serializers.IntegerField(source='order.id', read_only=True)
+    customer_name = serializers.SerializerMethodField()
+    customer_mobile = serializers.CharField(source='order.user.mobile_number', read_only=True)
+
+    class Meta:
+        model = OfflinePaymentCollection
+        fields = (
+            'id', 'order_id', 'customer_name', 'customer_mobile',
+            'delivery_partner', 'delivery_partner_name', 'delivery_partner_mobile',
+            'payment_method', 'amount', 'status', 'transaction_reference',
+            'reason', 'collected_at', 'verified_at', 'verified_by',
+            'notes', 'created_at', 'updated_at',
+        )
+        read_only_fields = ('id', 'created_at', 'updated_at')
+
+    def get_delivery_partner_name(self, obj):
+        name = f"{obj.delivery_partner.first_name or ''} {obj.delivery_partner.last_name or ''}".strip()
+        return name or obj.delivery_partner.mobile_number
+
+    def get_customer_name(self, obj):
+        name = f"{obj.order.user.first_name or ''} {obj.order.user.last_name or ''}".strip()
+        return name or obj.order.user.mobile_number
+
+
 class OrderSerializer(serializers.ModelSerializer):
     items = OrderItemSerializer(many=True, read_only=True)
     address_detail = serializers.SerializerMethodField()
@@ -34,11 +61,11 @@ class OrderSerializer(serializers.ModelSerializer):
         fields = (
             'id', 'user', 'address', 'address_detail', 'delivery_slot', 'delivery_slot_detail',
             'items', 'total_amount', 'discount_amount', 'final_amount',
-            'status', 'created_at', 'updated_at',
+            'status', 'payment_method', 'payment_status', 'created_at', 'updated_at',
         )
         read_only_fields = (
             'id', 'user', 'total_amount', 'discount_amount', 'final_amount',
-            'created_at', 'updated_at',
+            'payment_status', 'created_at', 'updated_at',
         )
 
     def get_address_detail(self, obj):
@@ -61,6 +88,11 @@ class CreateOrderItemSerializer(serializers.Serializer):
 class CreateOrderSerializer(serializers.Serializer):
     address_id = serializers.IntegerField()
     delivery_slot_id = serializers.IntegerField()
+    payment_method = serializers.ChoiceField(
+        choices=['cash', 'upi_at_delivery', 'razorpay'],
+        default='cash',
+        required=False,
+    )
     items = CreateOrderItemSerializer(many=True)
 
     def validate_address_id(self, value):

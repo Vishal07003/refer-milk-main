@@ -16,18 +16,56 @@ from pathlib import Path
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Load environment variables from .env file if present
+_env_file = BASE_DIR / ".env"
+if _env_file.exists():
+    try:
+        with open(_env_file, encoding="utf-8") as _f:
+            for _line in _f:
+                _line = _line.strip()
+                if not _line or _line.startswith("#"):
+                    continue
+                _k, _sep, _v = _line.partition("=")
+                if _sep:
+                    _k = _k.strip()
+                    _v = _v.strip().strip("'\"")
+                    # Do not overwrite already set OS environment variables
+                    if _k and _k not in os.environ:
+                        os.environ[_k] = _v
+    except Exception:
+        pass
+
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-8&)#rcp_sxz(8v#k%=xe-f-xerl4ct%6v=n*b$uodzdmh@u8_@"
+SECRET_KEY = os.getenv("SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv("DEBUG", "True").lower() in ("true", "1", "t", "yes")
 
-ALLOWED_HOSTS = ["*"]
+_allowed_hosts_env = os.getenv("ALLOWED_HOSTS", "*")
+if _allowed_hosts_env and _allowed_hosts_env != "*":
+    # Strip any brackets, whitespace, quotes, or accidental port numbers (e.g. :8000)
+    cleaned_hosts = []
+    for raw_host in _allowed_hosts_env.replace("[", "").replace("]", "").replace('"', "").replace("'", "").split(","):
+        h = raw_host.strip()
+        if h:
+            # Remove port if specified (e.g. 192.168.31.8:8000 -> 192.168.31.8)
+            if ":" in h and not h.startswith("["):
+                h = h.split(":")[0]
+            if h not in cleaned_hosts:
+                cleaned_hosts.append(h)
+    ALLOWED_HOSTS = cleaned_hosts or ["*"]
+else:
+    ALLOWED_HOSTS = ["*"]
 
+# Always ensure local dev hosts are permitted when DEBUG is True
+if DEBUG:
+    for default_dev_host in ("127.0.0.1", "localhost", "192.168.31.8", "testserver"):
+        if "*" not in ALLOWED_HOSTS and default_dev_host not in ALLOWED_HOSTS:
+            ALLOWED_HOSTS.append(default_dev_host)
 
 # Application definition
 
@@ -51,7 +89,10 @@ INSTALLED_APPS = [
 
 FIREBASE_SERVICE_ACCOUNT_KEY_PATH = os.getenv(
     "FIREBASE_SERVICE_ACCOUNT_KEY_PATH",
-    os.path.join(BASE_DIR, "firebase", "service-account.json"),
+    os.getenv(
+        "FIREBASE_CREDENTIALS_PATH",
+        os.path.join(BASE_DIR, "firebase", "service-account.json"),
+    ),
 )
 
 MIDDLEWARE = [
@@ -69,7 +110,7 @@ ROOT_URLCONF = "core.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        "DIRS": [BASE_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -87,12 +128,30 @@ WSGI_APPLICATION = "core.wsgi.application"
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+_db_engine = os.getenv("DB_ENGINE", "django.db.backends.sqlite3")
+_db_name = os.getenv("DB_NAME", str(BASE_DIR / "db.sqlite3"))
+
+if "sqlite3" in _db_engine:
+    # Resolve relative sqlite database file path to BASE_DIR if needed
+    if _db_name != ":memory:" and not os.path.isabs(_db_name):
+        _db_name = str(BASE_DIR / _db_name)
+    DATABASES = {
+        "default": {
+            "ENGINE": _db_engine,
+            "NAME": _db_name,
+        }
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": _db_engine,
+            "NAME": _db_name,
+            "USER": os.getenv("DB_USER", ""),
+            "PASSWORD": os.getenv("DB_PASSWORD", ""),
+            "HOST": os.getenv("DB_HOST", ""),
+            "PORT": os.getenv("DB_PORT", ""),
+        }
+    }
 
 
 # Password validation
@@ -129,7 +188,8 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
-STATIC_URL = "static/"
+STATIC_URL = "/static/"
+STATICFILES_DIRS = [BASE_DIR / "static"]
 
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
@@ -156,11 +216,41 @@ SPECTACULAR_SETTINGS = {
 from datetime import timedelta
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(days=7),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=30),
-    "ROTATE_REFRESH_TOKENS": False,
+    "ACCESS_TOKEN_LIFETIME": timedelta(
+        days=int(os.getenv("JWT_ACCESS_TOKEN_LIFETIME_DAYS", 7))
+    ),
+    "REFRESH_TOKEN_LIFETIME": timedelta(
+        days=int(os.getenv("JWT_REFRESH_TOKEN_LIFETIME_DAYS", 30))
+    ),
+    "ROTATE_REFRESH_TOKENS": os.getenv("JWT_ROTATE_REFRESH_TOKENS", "False").lower() in ("true", "1", "t", "yes"),
     "AUTH_HEADER_TYPES": ("Bearer",),
 }
 
-RAZORPAY_KEY_ID = "rzp_test_YOUR_KEY_ID"
-RAZORPAY_KEY_SECRET = "YOUR_KEY_SECRET"
+RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID", "rzp_test_YOUR_KEY_ID")
+RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET", "YOUR_KEY_SECRET")
+
+# Email configuration
+EMAIL_BACKEND = os.getenv(
+    "EMAIL_BACKEND",
+    "django.core.mail.backends.console.EmailBackend" if DEBUG else "django.core.mail.backends.smtp.EmailBackend",
+)
+EMAIL_HOST = os.getenv("EMAIL_HOST", "localhost")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", 587))
+EMAIL_HOST_USER = os.getenv("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = os.getenv("EMAIL_USE_TLS", "True").lower() in ("true", "1", "t", "yes")
+EMAIL_USE_SSL = os.getenv("EMAIL_USE_SSL", "False").lower() in ("true", "1", "t", "yes")
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "webmaster@localhost")
+
+# CORS and CSRF configuration
+_cors_origins_env = os.getenv("CORS_ALLOWED_ORIGINS", "")
+if _cors_origins_env:
+    CORS_ALLOWED_ORIGINS = [orig.strip() for orig in _cors_origins_env.split(",") if orig.strip()]
+
+_csrf_origins_env = os.getenv("CSRF_TRUSTED_ORIGINS", "")
+if _csrf_origins_env:
+    CSRF_TRUSTED_ORIGINS = [orig.strip() for orig in _csrf_origins_env.split(",") if orig.strip()]
+
+# 2Factor SMS Gateway Configuration
+TWOFACTOR_API_KEY = os.getenv("TWOFACTOR_API_KEY", "").strip()
+TWOFACTOR_OTP_TEMPLATE_NAME = os.getenv("TWOFACTOR_OTP_TEMPLATE_NAME", "").strip()

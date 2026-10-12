@@ -1,0 +1,51 @@
+<!-- SECTION 11: NOTIFICATIONS -->
+      <div id="content-notifications" class="space-y-4 hidden">
+        <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 class="text-base font-bold text-slate-900">Push Notifications & Customer Broadcasts</h3>
+              <p class="text-xs text-slate-500">Draft, compose, and send in-app notifications to customers and delivery boys.</p>
+            </div>
+            <button onclick="openCreateNotificationModal()" class="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-brand hover:bg-brand-dark text-white text-xs font-semibold transition shadow-xs">
+              <i data-lucide="send" class="w-4 h-4"></i>
+              <span>Compose Notification</span>
+            </button>
+          </div>
+
+          <!-- Filter & Search Toolbar for Notifications -->
+          <div class="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-100">
+            <div class="flex items-center space-x-2">
+              <label for="notif-type-filter" class="text-xs font-semibold text-slate-500 whitespace-nowrap">Type:</label>
+              <select id="notif-type-filter" onchange="filterNotifications()" class="text-xs py-2 px-3 rounded-xl border border-slate-200 bg-white text-slate-700 focus:outline-none focus:ring-1 focus:ring-brand font-medium">
+                <option value="all">All Types</option>
+                <option value="general">General</option>
+                <option value="order">Order</option>
+                <option value="subscription">Subscription</option>
+                <option value="delivery">Delivery</option>
+              </select>
+            </div>
+            <div class="search-input-wrapper w-full sm:w-64">
+              <i data-lucide="search" class="search-icon"></i>
+              <input type="text" id="notif-search-input" onkeyup="debounceNotifSearch()" placeholder="Search title, message, recipient..." />
+            </div>
+          </div>
+
+          <div class="overflow-x-auto rounded-xl border border-slate-200">
+            <table class="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold uppercase tracking-wider text-[11px]">
+                  <th class="py-3 px-4">Recipient</th>
+                  <th class="py-3 px-4">Title</th>
+                  <th class="py-3 px-4">Message</th>
+                  <th class="py-3 px-4">Type</th>
+                  <th class="py-3 px-4">Sent At</th>
+                  <th class="py-3 px-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="notifications-table-body" class="divide-y divide-slate-100">
+                <tr><td colspan="6" class="text-center py-8 text-slate-400">Loading notifications...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>

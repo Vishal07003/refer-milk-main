@@ -1,0 +1,171 @@
+<!-- MODAL: ADD / EDIT DELIVERY SLOT -->
+<div id="slot-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl max-w-md w-full shadow-2xl overflow-hidden border border-slate-100 animate-in fade-in zoom-in-95 duration-150">
+    <!-- Header -->
+    <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+      <div class="flex items-center space-x-2.5">
+        <div class="w-8 h-8 rounded-lg bg-emerald-50 text-brand flex items-center justify-center">
+          <i data-lucide="clock" class="w-4 h-4"></i>
+        </div>
+        <h4 id="slot-modal-title" class="text-sm font-bold text-slate-900">Add Delivery Slot</h4>
+      </div>
+      <button onclick="closeSlotModal()" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+
+    <!-- Error Alert Box -->
+    <div id="slot-modal-error" class="hidden px-6 pt-4">
+      <div class="p-3 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-start space-x-2">
+        <i data-lucide="alert-circle" class="w-4 h-4 shrink-0 text-red-500 mt-0.5"></i>
+        <span id="slot-modal-error-text">Validation error</span>
+      </div>
+    </div>
+
+    <!-- Form Content -->
+    <form id="slot-form" onsubmit="handleSlotSubmit(event)" class="p-6 space-y-4">
+      <input type="hidden" id="slot-id" value="" />
+      <input type="hidden" id="slot-start-time" value="" />
+      <input type="hidden" id="slot-end-time" value="" />
+
+      <!-- Name -->
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Slot Name *</label>
+        <input type="text" id="slot-name" required placeholder="e.g. Morning 6:00 AM – 8:00 AM" class="w-full text-xs px-3.5 py-2.5 rounded-xl border border-slate-200 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand" />
+        <p class="text-[11px] text-slate-400 mt-1">Friendly label shown to customers during checkout.</p>
+      </div>
+
+      <!-- Time Window Selection (12-Hour AM/PM Format) -->
+      <div class="space-y-3">
+        <!-- Start Time -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1.5 flex items-center justify-between">
+            <span>Start Time *</span>
+            <span id="slot-start-preview" class="text-[11px] font-mono font-bold text-brand bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">06:00 AM</span>
+          </label>
+          <div class="grid grid-cols-12 gap-1.5 items-center">
+            <!-- Hour -->
+            <div class="col-span-5">
+              <select id="slot-start-hour" onchange="updateSlotTimePreview()" class="w-full text-xs px-2.5 py-2.5 rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand font-medium">
+                <option value="1">01</option>
+                <option value="2">02</option>
+                <option value="3">03</option>
+                <option value="4">04</option>
+                <option value="5">05</option>
+                <option value="6" selected>06</option>
+                <option value="7">07</option>
+                <option value="8">08</option>
+                <option value="9">09</option>
+                <option value="10">10</option>
+                <option value="11">11</option>
+                <option value="12">12</option>
+              </select>
+            </div>
+            <!-- Minute -->
+            <div class="col-span-4">
+              <select id="slot-start-minute" onchange="updateSlotTimePreview()" class="w-full text-xs px-2.5 py-2.5 rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand font-medium">
+                <option value="00" selected>00</option>
+                <option value="05">05</option>
+                <option value="10">10</option>
+                <option value="15">15</option>
+                <option value="20">20</option>
+                <option value="25">25</option>
+                <option value="30">30</option>
+                <option value="35">35</option>
+                <option value="40">40</option>
+                <option value="45">45</option>
+                <option value="50">50</option>
+                <option value="55">55</option>
+              </select>
+            </div>
+            <!-- AM / PM -->
+            <div class="col-span-3">
+              <select id="slot-start-ampm" onchange="updateSlotTimePreview()" class="w-full text-xs px-2 py-2.5 rounded-xl border border-slate-200 bg-slate-50 font-bold text-slate-800 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand">
+                <option value="AM" selected>AM</option>
+                <option value="PM">PM</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- End Time -->
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1.5 flex items-center justify-between">
+            <span>End Time *</span>
+            <span id="slot-end-preview" class="text-[11px] font-mono font-bold text-brand bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">08:00 AM</span>
+          </label>
+          <div class="grid grid-cols-12 gap-1.5 items-center">
+            <!-- Hour -->
+            <div class="col-span-5">
+              <select id="slot-end-hour" onchange="updateSlotTimePreview()" class="w-full text-xs px-2.5 py-2.5 rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand font-medium">
+                <option value="1">01</option>
+                <option value="2">02</option>
+                <option value="3">03</option>
+                <option value="4">04</option>
+                <option value="5">05</option>
+                <option value="6">06</option>
+                <option value="7">07</option>
+                <option value="8" selected>08</option>
+                <option value="9">09</option>
+                <option value="10">10</option>
+                <option value="11">11</option>
+                <option value="12">12</option>
+              </select>
+            </div>
+            <!-- Minute -->
+            <div class="col-span-4">
+              <select id="slot-end-minute" onchange="updateSlotTimePreview()" class="w-full text-xs px-2.5 py-2.5 rounded-xl border border-slate-200 bg-white focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand font-medium">
+                <option value="00" selected>00</option>
+                <option value="05">05</option>
+                <option value="10">10</option>
+                <option value="15">15</option>
+                <option value="20">20</option>
+                <option value="25">25</option>
+                <option value="30">30</option>
+                <option value="35">35</option>
+                <option value="40">40</option>
+                <option value="45">45</option>
+                <option value="50">50</option>
+                <option value="55">55</option>
+              </select>
+            </div>
+            <!-- AM / PM -->
+            <div class="col-span-3">
+              <select id="slot-end-ampm" onchange="updateSlotTimePreview()" class="w-full text-xs px-2 py-2.5 rounded-xl border border-slate-200 bg-slate-50 font-bold text-slate-800 focus:outline-none focus:border-brand focus:ring-1 focus:ring-brand">
+                <option value="AM" selected>AM</option>
+                <option value="PM">PM</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Window Summary Pill -->
+        <div class="p-2.5 bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-between">
+          <span class="text-[11px] text-slate-500 flex items-center space-x-1.5">
+            <i data-lucide="info" class="w-3.5 h-3.5 text-slate-400"></i>
+            <span>Delivery Window:</span>
+          </span>
+          <span id="slot-window-summary" class="text-xs font-bold text-slate-800 font-mono">06:00 AM – 08:00 AM</span>
+        </div>
+      </div>
+      <p class="text-[11px] text-slate-400">Start time must be earlier than end time. Active slot windows cannot overlap.</p>
+
+      <!-- Active Checkbox -->
+      <div class="pt-2 border-t border-slate-100 flex items-center space-x-2">
+        <input type="checkbox" id="slot-is-active" checked class="w-4 h-4 text-brand rounded border-slate-300 focus:ring-brand" />
+        <label for="slot-is-active" class="text-xs font-semibold text-slate-700">Active in Mobile App</label>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="pt-4 flex items-center justify-end space-x-2">
+        <button type="button" onclick="closeSlotModal()" class="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 text-xs font-semibold hover:bg-slate-50 transition">
+          Cancel
+        </button>
+        <button type="submit" id="slot-submit-btn" class="px-4 py-2 rounded-xl bg-brand hover:bg-brand-dark text-white text-xs font-semibold transition shadow-xs flex items-center space-x-1.5">
+          <i data-lucide="check" class="w-4 h-4"></i>
+          <span id="slot-submit-btn-text">Save Slot</span>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>

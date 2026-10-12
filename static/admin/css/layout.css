@@ -1,0 +1,21 @@
+/* Layout & Sidebar & Navigation styles */
+#admin-sidebar {
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform, margin-left;
+}
+
+/* Sidebar backdrop overlay on mobile */
+#sidebar-backdrop {
+  transition: opacity 0.25s ease-in-out;
+}
+
+/* Header sticky polish */
+header {
+  box-shadow: 0 1px 2px 0 rgba(15, 23, 42, 0.03);
+}
+
+/* Prevent accidental horizontal overflow globally */
+html, body {
+  max-width: 100vw;
+  overflow-x: hidden;
+}

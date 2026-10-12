@@ -1,0 +1,60 @@
+<!-- SECTION 12: SETTINGS & AUDIT LOGS -->
+      <div id="content-settings" class="space-y-4 hidden">
+        <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 class="text-base font-bold text-slate-900">System Settings & Platform Rules</h3>
+              <p class="text-xs text-slate-500">Configure cutoff times, store policies, support contact, and cash rules.</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <div class="search-input-wrapper w-full sm:w-56">
+                <i data-lucide="search" class="search-icon"></i>
+                <input type="text" id="settings-search-input" onkeyup="debounceSettingsSearch()" placeholder="Search settings or logs..." />
+              </div>
+              <button onclick="openEditSettingModal('', '', '')" class="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-brand hover:bg-brand-dark text-white text-xs font-semibold transition shadow-xs whitespace-nowrap">
+                <i data-lucide="plus" class="w-4 h-4"></i>
+                <span>Add Setting</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="overflow-x-auto rounded-xl border border-slate-200">
+            <table class="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold uppercase tracking-wider text-[11px]">
+                  <th class="py-3 px-4">Setting Key</th>
+                  <th class="py-3 px-4">Current Value</th>
+                  <th class="py-3 px-4">Description</th>
+                  <th class="py-3 px-4">Last Updated</th>
+                  <th class="py-3 px-4 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody id="settings-table-body" class="divide-y divide-slate-100">
+                <tr><td colspan="5" class="text-center py-8 text-slate-400">Loading settings...</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="pt-6 border-t border-slate-200">
+            <h4 class="text-sm font-bold text-slate-900 mb-2">Immutable Admin Action Audit Trail</h4>
+            <p class="text-xs text-slate-500 mb-3">Live audit logging of all administrative status changes, cash verifications, and record creations.</p>
+            <div class="overflow-x-auto rounded-xl border border-slate-200 max-h-72 overflow-y-auto">
+              <table class="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold uppercase tracking-wider text-[11px]">
+                    <th class="py-2.5 px-3">Timestamp</th>
+                    <th class="py-2.5 px-3">Actor</th>
+                    <th class="py-2.5 px-3">Module</th>
+                    <th class="py-2.5 px-3">Action</th>
+                    <th class="py-2.5 px-3">Target ID</th>
+                    <th class="py-2.5 px-3">Audit Details</th>
+                  </tr>
+                </thead>
+                <tbody id="audit-logs-table-body" class="divide-y divide-slate-100">
+                  <tr><td colspan="6" class="text-center py-6 text-slate-400">Loading audit trail...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>

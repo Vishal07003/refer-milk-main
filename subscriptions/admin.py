@@ -1,6 +1,14 @@
 from django.contrib import admin
 
-from .models import Payment, ReferralDiscountTier, Subscription
+from .models import Payment, ReferralDiscountTier, Subscription, SubscriptionPlan
+
+
+@admin.register(SubscriptionPlan)
+class SubscriptionPlanAdmin(admin.ModelAdmin):
+    list_display = ('id', 'name', 'product', 'quantity', 'unit', 'frequency', 'price_per_unit', 'is_active', 'created_at')
+    list_filter = ('is_active', 'frequency', 'product')
+    search_fields = ('name', 'product__name')
+    ordering = ('-created_at',)
 
 
 @admin.register(ReferralDiscountTier)
@@ -12,12 +20,12 @@ class ReferralDiscountTierAdmin(admin.ModelAdmin):
 @admin.register(Subscription)
 class SubscriptionAdmin(admin.ModelAdmin):
     list_display = (
-        'id', 'user', 'product', 'address', 'quantity', 'start_date', 'end_date',
+        'id', 'plan', 'user', 'product', 'address', 'quantity', 'start_date', 'end_date',
         'price_per_unit', 'discount_per_unit', 'final_price_per_unit',
         'total_amount', 'status', 'cancelled_at', 'created_at',
     )
-    list_filter = ('status',)
-    search_fields = ('user__mobile_number', 'product__name')
+    list_filter = ('status', 'plan')
+    search_fields = ('user__mobile_number', 'product__name', 'plan__name')
     readonly_fields = ('cancelled_at', 'created_at', 'updated_at')
     ordering = ('-created_at',)
 

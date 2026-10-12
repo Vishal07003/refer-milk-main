@@ -1,0 +1,237 @@
+<!-- MODAL: Confirm Bulk Cash Handover from Delivery Partner -->
+  <div id="confirm-handover-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 hidden">
+    <div class="modal-dialog max-w-lg w-full p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-8 h-8 rounded-xl bg-brand-surface text-brand flex items-center justify-center">
+            <i data-lucide="shield-check" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-slate-900">Admin Cash Handover Confirmation</h3>
+            <p class="text-[11px] text-slate-500">Confirm physical cash count received at the hub</p>
+          </div>
+        </div>
+        <button onclick="closeConfirmHandoverModal()" class="modal-close-btn">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="space-y-2.5 text-xs bg-slate-50 p-4 rounded-xl border border-slate-200">
+        <div class="flex justify-between">
+          <span class="text-slate-500">Handover ID:</span>
+          <strong class="text-slate-900 font-semibold font-mono" id="handover-modal-id">#0</strong>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-slate-500">Delivery Partner:</span>
+          <strong class="text-slate-900 font-semibold" id="handover-modal-partner">Partner</strong>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-slate-500">Delivery Boy Submitted Amount:</span>
+          <strong class="text-brand font-bold text-sm" id="handover-modal-submitted">₹0.00</strong>
+        </div>
+        <div class="flex justify-between" id="handover-modal-notes-row">
+          <span class="text-slate-500">Partner Notes:</span>
+          <span class="text-slate-700 italic max-w-xs truncate" id="handover-modal-partner-notes">—</span>
+        </div>
+      </div>
+
+      <!-- Admin Physical Cash Count Input -->
+      <div>
+        <label class="block text-xs font-bold text-slate-800 mb-1">Actual Physical Cash Received (₹) *</label>
+        <div class="relative">
+          <span class="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">₹</span>
+          <input type="number" step="0.01" id="handover-received-input" oninput="calculateLiveDiscrepancy()" placeholder="0.00" class="w-full pl-8 pr-3 py-2.5 text-sm font-bold bg-white border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand/20 text-slate-900" />
+        </div>
+      </div>
+
+      <!-- Live Discrepancy Indicator Box -->
+      <div id="handover-discrepancy-box" class="p-3 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-between text-xs">
+        <span class="text-slate-600 font-medium">Calculated Variance / Discrepancy:</span>
+        <strong id="handover-live-discrepancy" class="font-extrabold text-sm text-slate-700">₹0.00 (Match)</strong>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Admin Verification Notes / Audit Remarks</label>
+        <textarea id="handover-admin-notes" rows="2" placeholder="e.g. Cash verified & deposited into safe" class="admin-input"></textarea>
+      </div>
+
+      <div class="flex items-center space-x-2 pt-2 border-t border-slate-100">
+        <button onclick="submitHandoverConfirmation()" class="flex-1 bg-brand hover:bg-brand-dark text-white font-bold py-2.5 px-4 rounded-xl transition text-xs shadow-xs flex items-center justify-center space-x-1.5">
+          <i data-lucide="check" class="w-4 h-4"></i>
+          <span>Confirm & Reconcile Handover</span>
+        </button>
+        <button onclick="closeConfirmHandoverModal()" class="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold transition">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+
+<!-- MODAL: Inspect Partner Collections (Drill-down for discrepancy investigation) -->
+  <div id="inspect-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 hidden">
+    <div class="modal-dialog max-w-3xl w-full p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3 shrink-0">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-8 h-8 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center">
+            <i data-lucide="file-search" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-slate-900" id="inspect-partner-title">Partner Cash Collections Audit</h3>
+            <p class="text-[11px] text-slate-500" id="inspect-partner-subtitle">Investigate individual cash drops for this delivery partner</p>
+          </div>
+        </div>
+        <button onclick="closeInspectModal()" class="modal-close-btn">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="overflow-y-auto flex-1 border border-slate-200 rounded-xl">
+        <table class="w-full text-left border-collapse text-xs">
+          <thead class="sticky top-0 bg-slate-100 z-10">
+            <tr class="border-b border-slate-200 text-slate-600 font-semibold uppercase tracking-wider text-[11px]">
+              <th class="py-2.5 px-3">Collection / Order</th>
+              <th class="py-2.5 px-3">Customer</th>
+              <th class="py-2.5 px-3">Exact Amount</th>
+              <th class="py-2.5 px-3">Date & Time</th>
+              <th class="py-2.5 px-3">Status</th>
+            </tr>
+          </thead>
+          <tbody id="inspect-table-body" class="divide-y divide-slate-100">
+            <tr><td colspan="5" class="text-center py-6 text-slate-400">Loading audit records...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="flex justify-end pt-2 shrink-0 border-t border-slate-100">
+        <button onclick="closeInspectModal()" class="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition shadow-xs">
+          Close Audit View
+        </button>
+      </div>
+    </div>
+  </div>
+
+<!-- MODAL: Add Delivery Partner -->
+  <div id="create-boy-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 hidden">
+    <div class="modal-dialog max-w-md w-full p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-8 h-8 rounded-xl bg-brand-surface text-brand flex items-center justify-center">
+            <i data-lucide="user-plus" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-slate-900">Add New Delivery Partner</h3>
+            <p class="text-[11px] text-slate-500">Create login credentials and zone for delivery partner</p>
+          </div>
+        </div>
+        <button onclick="closeCreateBoyModal()" class="modal-close-btn">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Mobile Number (Login ID) *</label>
+          <input type="text" id="boy-mobile" placeholder="10-digit mobile number" class="admin-input font-mono" />
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">First Name *</label>
+            <input type="text" id="boy-fname" placeholder="First Name" class="admin-input" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Last Name</label>
+            <input type="text" id="boy-lname" placeholder="Last Name" class="admin-input" />
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Vehicle Number</label>
+          <input type="text" id="boy-vehicle" placeholder="e.g. MH-13-AB-5678" class="admin-input font-mono" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Assigned Route / Zone</label>
+          <input type="text" id="boy-zone" placeholder="e.g. Sangola Central / Route A" class="admin-input" />
+        </div>
+      </div>
+
+      <div class="flex items-center space-x-2 pt-2 border-t border-slate-100">
+        <button onclick="submitCreateBoy()" class="flex-1 bg-brand hover:bg-brand-dark text-white font-bold py-2.5 px-4 rounded-xl transition text-xs shadow-xs flex items-center justify-center space-x-1.5">
+          <i data-lucide="check" class="w-4 h-4"></i>
+          <span>Create Partner Account</span>
+        </button>
+        <button onclick="closeCreateBoyModal()" class="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold transition">
+          Cancel
+        </button>
+      </div>
+    </div>
+  </div>
+
+<!-- MODAL: Delivery Partner 360 Details & Edit -->
+  <div id="boy-details-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 hidden">
+    <div class="modal-dialog max-w-2xl w-full p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center space-x-3">
+          <div class="w-10 h-10 rounded-full bg-emerald-100 text-emerald-800 font-bold flex items-center justify-center text-sm" id="detail-boy-avatar">DP</div>
+          <div>
+            <h3 class="text-base font-bold text-slate-900" id="detail-boy-name">—</h3>
+            <p class="text-xs text-slate-500 font-mono" id="detail-boy-mobile">—</p>
+          </div>
+        </div>
+        <button onclick="closeBoyDetailsModal()" class="modal-close-btn"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <input type="hidden" id="detail-boy-id" />
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-100">
+          <p class="text-[11px] text-slate-500 font-semibold">Cash in Hand</p>
+          <p class="text-base font-bold text-amber-700" id="detail-boy-cash">₹0.00</p>
+        </div>
+        <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-100">
+          <p class="text-[11px] text-slate-500 font-semibold">Total Collected</p>
+          <p class="text-base font-bold text-slate-900" id="detail-boy-total-collected">₹0.00</p>
+        </div>
+        <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-100">
+          <p class="text-[11px] text-slate-500 font-semibold">Handed Over</p>
+          <p class="text-base font-bold text-emerald-700" id="detail-boy-handed">₹0.00</p>
+        </div>
+      </div>
+      <div class="space-y-3 pt-2">
+        <h4 class="text-xs font-bold text-slate-800 uppercase tracking-wider">Update Profile & Zone</h4>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">First Name</label>
+            <input type="text" id="detail-boy-fname" class="admin-input" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Last Name</label>
+            <input type="text" id="detail-boy-lname" class="admin-input" />
+          </div>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Vehicle Number</label>
+            <input type="text" id="detail-boy-vehicle-input" class="admin-input font-mono" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Assigned Zone</label>
+            <input type="text" id="detail-boy-zone-input" class="admin-input" />
+          </div>
+        </div>
+        <div class="flex flex-wrap items-center gap-4 pt-1">
+          <label class="flex items-center space-x-1.5 text-xs text-slate-700 cursor-pointer">
+            <input type="checkbox" id="detail-boy-on-duty" class="rounded border-slate-300 text-brand" />
+            <span>On Duty (Available for deliveries)</span>
+          </label>
+          <label class="flex items-center space-x-1.5 text-xs text-slate-700 cursor-pointer">
+            <input type="checkbox" id="detail-boy-active" class="rounded border-slate-300 text-brand" />
+            <span>Account Active</span>
+          </label>
+        </div>
+      </div>
+      <div class="flex items-center space-x-2 pt-3 border-t border-slate-100">
+        <button onclick="submitUpdateBoyProfile()" class="flex-1 bg-brand hover:bg-brand-dark text-white font-bold py-2.5 px-4 rounded-xl text-xs transition shadow-xs flex items-center justify-center space-x-1.5">
+          <i data-lucide="check" class="w-4 h-4"></i>
+          <span>Save Changes</span>
+        </button>
+        <button onclick="closeBoyDetailsModal()" class="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold transition">Close</button>
+      </div>
+    </div>
+  </div>

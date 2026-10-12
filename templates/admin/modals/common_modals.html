@@ -1,0 +1,110 @@
+<!-- MODAL: Collection Audit Record Inspection & Note -->
+  <div id="collection-audit-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 hidden">
+    <div class="modal-dialog max-w-md w-full p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
+            <i data-lucide="shield-alert" class="w-4 h-4"></i>
+          </div>
+          <h3 class="text-base font-bold text-slate-900">Collection Audit & Notes</h3>
+        </div>
+        <button onclick="closeCollectionAuditModal()" class="modal-close-btn"><i data-lucide="x" class="w-4 h-4"></i></button>
+      </div>
+      <input type="hidden" id="audit-col-id" />
+      <div class="p-3.5 bg-slate-50 rounded-xl space-y-1.5 text-xs border border-slate-100">
+        <p class="flex justify-between"><span class="font-semibold text-slate-500">Order ID:</span> <span id="audit-col-order" class="font-bold text-slate-900 font-mono">—</span></p>
+        <p class="flex justify-between"><span class="font-semibold text-slate-500">Cash Amount:</span> <span id="audit-col-amount" class="font-bold text-emerald-700 font-mono">₹0.00</span></p>
+        <p class="flex justify-between"><span class="font-semibold text-slate-500">Partner:</span> <span id="audit-col-partner" class="font-semibold text-slate-800">—</span></p>
+        <p class="flex justify-between"><span class="font-semibold text-slate-500">Current Status:</span> <span id="audit-col-status" class="font-semibold text-slate-700">—</span></p>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Audit Correction / Verification Note</label>
+        <textarea id="audit-col-notes" rows="3" placeholder="Enter reason or note for audit correction..." class="admin-input"></textarea>
+      </div>
+      <div class="flex items-center space-x-2 pt-2">
+        <button onclick="submitCollectionAudit('verified')" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 px-3 rounded-xl text-xs transition shadow-xs">Verify</button>
+        <button onclick="submitCollectionAudit('rejected')" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-3 rounded-xl text-xs transition shadow-xs">Reject</button>
+        <button onclick="closeCollectionAuditModal()" class="px-3.5 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold transition">Close</button>
+      </div>
+    </div>
+  </div>
+
+<!-- MODAL: Compose Notification -->
+  <div id="notification-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 hidden">
+    <div class="modal-dialog max-w-md w-full p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-8 h-8 rounded-xl bg-brand-surface text-brand flex items-center justify-center">
+            <i data-lucide="bell" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-slate-900">Compose Push Notification</h3>
+            <p class="text-[11px] text-slate-500">Broadcast message to customers or delivery partners</p>
+          </div>
+        </div>
+        <button onclick="closeNotificationModal()" class="modal-close-btn"><i data-lucide="x" class="w-4 h-4"></i></button>
+      </div>
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Target Audience *</label>
+          <select id="notif-target" class="admin-input bg-white">
+            <option value="all_customers">All Active Customers</option>
+            <option value="all_delivery_boys">All Delivery Partners</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Notification Title *</label>
+          <input type="text" id="notif-title" placeholder="e.g. Fresh Morning Cow Milk Delivered!" class="admin-input" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Message Body *</label>
+          <textarea id="notif-body" rows="3" placeholder="Type notification content..." class="admin-input"></textarea>
+        </div>
+      </div>
+      <div class="flex items-center space-x-2 pt-2 border-t border-slate-100">
+        <button onclick="submitSendNotification()" class="flex-1 bg-brand hover:bg-brand-dark text-white font-bold py-2.5 px-4 rounded-xl text-xs transition shadow-xs flex items-center justify-center space-x-1.5">
+          <i data-lucide="send" class="w-4 h-4"></i>
+          <span>Send Notification</span>
+        </button>
+        <button onclick="closeNotificationModal()" class="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold transition">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+<!-- MODAL: System Setting Edit -->
+  <div id="setting-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 hidden">
+    <div class="modal-dialog max-w-md w-full p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-8 h-8 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center">
+            <i data-lucide="settings" class="w-4 h-4"></i>
+          </div>
+          <h3 class="text-base font-bold text-slate-900">System Setting</h3>
+        </div>
+        <button onclick="closeSettingModal()" class="modal-close-btn"><i data-lucide="x" class="w-4 h-4"></i></button>
+      </div>
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Setting Key *</label>
+          <input type="text" id="setting-key" placeholder="e.g. store_name" class="admin-input font-mono" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Value *</label>
+          <input type="text" id="setting-value" placeholder="Value..." class="admin-input" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Description</label>
+          <input type="text" id="setting-desc" placeholder="What this controls..." class="admin-input" />
+        </div>
+      </div>
+      <div class="flex items-center space-x-2 pt-2 border-t border-slate-100">
+        <button onclick="submitSaveSetting()" class="flex-1 bg-brand hover:bg-brand-dark text-white font-bold py-2.5 px-4 rounded-xl text-xs transition shadow-xs flex items-center justify-center space-x-1.5">
+          <i data-lucide="check" class="w-4 h-4"></i>
+          <span>Save Setting</span>
+        </button>
+        <button onclick="closeSettingModal()" class="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold transition">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->

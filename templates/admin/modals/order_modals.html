@@ -1,0 +1,60 @@
+<!-- MODAL: Order Detail & Manage -->
+  <div id="order-details-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 hidden">
+    <div class="modal-dialog max-w-lg w-full p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-8 h-8 rounded-xl bg-brand-surface text-brand flex items-center justify-center">
+            <i data-lucide="shopping-cart" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-slate-900" id="order-modal-title">Order #—</h3>
+            <p class="text-[11px] text-slate-500">Manage fulfillment, partner assignment, and cash collection</p>
+          </div>
+        </div>
+        <button onclick="closeOrderDetailsModal()" class="modal-close-btn"><i data-lucide="x" class="w-4 h-4"></i></button>
+      </div>
+      <input type="hidden" id="manage-order-id" />
+      <div class="p-3.5 bg-slate-50 rounded-xl space-y-2 text-xs text-slate-700 border border-slate-100">
+        <div class="flex justify-between items-center"><span class="font-semibold text-slate-500">Customer:</span><span id="manage-order-customer" class="font-bold text-slate-900">—</span></div>
+        <div class="flex justify-between items-center"><span class="font-semibold text-slate-500">Delivery Address:</span><span id="manage-order-address" class="text-right max-w-xs truncate font-medium text-slate-800">—</span></div>
+        <div class="flex justify-between items-center"><span class="font-semibold text-slate-500">Amount (Cash Only):</span><span id="manage-order-amount" class="font-bold text-emerald-700 text-sm">₹0.00</span></div>
+        <div class="flex justify-between items-center"><span class="font-semibold text-slate-500">Items:</span><span id="manage-order-items" class="font-medium text-slate-800">—</span></div>
+      </div>
+      <div class="space-y-3 pt-1">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Assign / Reassign Partner</label>
+          <select id="manage-order-boy" class="w-full text-xs p-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 focus:outline-none focus:ring-1 focus:ring-brand"></select>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Fulfillment Status</label>
+            <select id="manage-order-status" class="w-full text-xs p-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 focus:outline-none focus:ring-1 focus:ring-brand">
+              <option value="pending">Pending</option>
+              <option value="confirmed">Confirmed</option>
+              <option value="processing">Processing</option>
+              <option value="out_for_delivery">Out for Delivery</option>
+              <option value="delivered">Delivered</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Cash Payment Status</label>
+            <select id="manage-order-pay-status" class="w-full text-xs p-2.5 rounded-xl border border-slate-200 bg-white text-slate-800 focus:outline-none focus:ring-1 focus:ring-brand">
+              <option value="pending">Pending</option>
+              <option value="collected">Collected (Cash)</option>
+              <option value="paid">Paid</option>
+              <option value="failed">Failed</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="flex items-center space-x-2 pt-3 border-t border-slate-100">
+        <button onclick="submitUpdateOrder()" class="flex-1 bg-brand hover:bg-brand-dark text-white font-bold py-2.5 px-4 rounded-xl text-xs transition shadow-xs flex items-center justify-center space-x-1.5">
+          <i data-lucide="check" class="w-4 h-4"></i>
+          <span>Save Order</span>
+        </button>
+        <button onclick="cancelCurrentOrder()" class="px-3.5 py-2.5 rounded-xl bg-red-50 text-red-700 hover:bg-red-100 text-xs font-semibold transition border border-red-200/60">Cancel Order</button>
+        <button onclick="closeOrderDetailsModal()" class="px-3 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold transition">Close</button>
+      </div>
+    </div>
+  </div>

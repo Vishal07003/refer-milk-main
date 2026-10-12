@@ -20,26 +20,58 @@ class ReferralDiscountTier(models.Model):
         return f"{self.min_referrals} referrals → ₹{self.discount_per_unit}/unit discount"
 
 
+class SubscriptionPlan(models.Model):
+    FREQUENCY_CHOICES = (
+        ('daily', 'Daily'),
+        ('alternate', 'Alternate Days'),
+        ('weekly', 'Weekly'),
+    )
+
+    name = models.CharField(max_length=150)
+    product = models.ForeignKey('products.Product', on_delete=models.CASCADE, related_name='subscription_plans')
+    quantity = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal('1.00'), help_text="Quantity per delivery")
+    unit = models.CharField(max_length=20, default='litre')
+    frequency = models.CharField(max_length=20, choices=FREQUENCY_CHOICES, default='daily')
+    price_per_unit = models.DecimalField(max_digits=10, decimal_places=2, help_text="Configured price per unit for plan")
+    schedule_description = models.CharField(max_length=255, blank=True, default='Morning Delivery')
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = 'Subscription Plan'
+        verbose_name_plural = 'Subscription Plans'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.name} - {self.product.name} ({self.quantity} {self.unit}, ₹{self.price_per_unit}/{self.unit})"
+
+
 class Subscription(models.Model):
     STATUS_CHOICES = (
+        ('pending', 'Pending Approval'),
         ('active', 'Active'),
         ('paused', 'Paused'),
         ('cancelled', 'Cancelled'),
         ('expired', 'Expired'),
     )
 
+    plan = models.ForeignKey(
+        SubscriptionPlan, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='customer_subscriptions'
+    )
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='subscriptions')
     product = models.ForeignKey('products.Product', on_delete=models.CASCADE, related_name='subscriptions')
     address = models.ForeignKey(Address, on_delete=models.CASCADE, related_name='subscriptions')
     delivery_slot = models.ForeignKey('orders.DeliverySlot', on_delete=models.SET_NULL, null=True, blank=True, related_name='subscriptions')
-    quantity = models.DecimalField(max_digits=10, decimal_places=2, help_text="Units per day")
+    quantity = models.DecimalField(max_digits=10, decimal_places=2, help_text="Units per delivery")
     start_date = models.DateField()
     end_date = models.DateField()
     price_per_unit = models.DecimalField(max_digits=10, decimal_places=2, help_text="Price at time of purchase")
     discount_per_unit = models.DecimalField(max_digits=10, decimal_places=2, default=0, help_text="Referral discount applied")
     final_price_per_unit = models.DecimalField(max_digits=10, decimal_places=2, help_text="Price after discount")
     total_amount = models.DecimalField(max_digits=12, decimal_places=2, help_text="final_price × quantity × 30 days")
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     delivery_boy = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='assigned_subscriptions')
     cancelled_at = models.DateTimeField(null=True, blank=True)
     razorpay_order_id = models.CharField(max_length=255, blank=True, default='')
@@ -54,7 +86,8 @@ class Subscription(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f"{self.user.mobile_number} - {self.product.name} x{self.quantity}/day ({self.status})"
+        plan_prefix = f"[{self.plan.name}] " if self.plan else ""
+        return f"{plan_prefix}{self.user.mobile_number} - {self.product.name} x{self.quantity}/day ({self.status})"
 
     def save(self, *args, **kwargs):
         self.final_price_per_unit = Decimal(str(self.price_per_unit)) - Decimal(str(self.discount_per_unit or 0))

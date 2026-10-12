@@ -1,0 +1,82 @@
+<!-- SECTION: CASH HANDOVER & RECONCILIATION -->
+      <div id="content-cash-handover" class="space-y-4 hidden">
+        <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 class="text-base font-bold text-slate-900 flex items-center space-x-2">
+                <i data-lucide="hand-coins" class="w-5 h-5 text-brand"></i>
+                <span>Cash Handover & Reconciliation Hub</span>
+              </h3>
+              <p class="text-xs text-slate-500">Delivery partners hand over collected cash in bulk. Admin verifies physical cash received, auto-calculating any discrepancy.</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button onclick="loadCashHandovers()" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-semibold transition">
+                <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                <span>Refresh Handovers</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Handover Status KPI summary subcards -->
+          <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-1">
+            <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+              <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Total Cash Collected</span>
+              <p class="text-lg font-extrabold text-slate-900 mt-0.5" id="recon-total-collected">₹0.00</p>
+              <span class="text-[10px] text-slate-400">by all delivery boys</span>
+            </div>
+            <div class="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200">
+              <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-700">Confirmed Handed Over</span>
+              <p class="text-lg font-extrabold text-emerald-900 mt-0.5" id="recon-total-confirmed">₹0.00</p>
+              <span class="text-[10px] text-emerald-700 font-medium">counted & accepted at hub</span>
+            </div>
+            <div class="p-3.5 rounded-xl bg-amber-50 border border-amber-200">
+              <span class="text-[10px] font-bold uppercase tracking-wider text-amber-700">Pending Cash Balance</span>
+              <p class="text-lg font-extrabold text-amber-900 mt-0.5" id="recon-pending-balance">₹0.00</p>
+              <span class="text-[10px] text-amber-700 font-medium" id="recon-pending-tag">0 submissions awaiting check</span>
+            </div>
+            <div class="p-3.5 rounded-xl bg-rose-50 border border-rose-200">
+              <span class="text-[10px] font-bold uppercase tracking-wider text-rose-700">Total Discrepancies</span>
+              <p class="text-lg font-extrabold text-rose-900 mt-0.5" id="recon-total-discrepancy">₹0.00</p>
+              <span class="text-[10px] text-rose-700 font-medium" id="recon-discrepancy-tag">0 variance cases</span>
+            </div>
+          </div>
+
+          <!-- Filter buttons -->
+          <div class="flex flex-wrap items-center justify-between gap-3 pt-2">
+            <div class="inline-flex rounded-xl bg-slate-100 p-1">
+              <button onclick="filterHandoverStatus('all')" id="filter-handover-all" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white text-slate-800 shadow-xs">All Handovers</button>
+              <button onclick="filterHandoverStatus('submitted')" id="filter-handover-submitted" class="px-3 py-1.5 text-xs font-medium rounded-lg text-slate-600 hover:text-slate-900">Submitted (Pending Review)</button>
+              <button onclick="filterHandoverStatus('confirmed')" id="filter-handover-confirmed" class="px-3 py-1.5 text-xs font-medium rounded-lg text-slate-600 hover:text-slate-900">Confirmed</button>
+              <button onclick="filterHandoverStatus('discrepancy')" id="filter-handover-discrepancy" class="px-3 py-1.5 text-xs font-medium rounded-lg text-slate-600 hover:text-slate-900">Discrepancy</button>
+            </div>
+            <div class="search-input-wrapper w-full sm:w-64">
+              <i data-lucide="search" class="search-icon"></i>
+              <input type="text" id="handover-search-input" onkeyup="debounceHandoverSearch()" placeholder="Search partner, Ref ID, notes..." />
+            </div>
+          </div>
+
+          <!-- Handover Table -->
+          <div class="overflow-x-auto rounded-xl border border-slate-200">
+            <table class="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold uppercase tracking-wider text-[11px]">
+                  <th class="py-3 px-4">Handover #</th>
+                  <th class="py-3 px-4">Delivery Partner</th>
+                  <th class="py-3 px-4">Submitted Amount</th>
+                  <th class="py-3 px-4">Received Amount</th>
+                  <th class="py-3 px-4">Discrepancy</th>
+                  <th class="py-3 px-4">Status</th>
+                  <th class="py-3 px-4">Submitted At</th>
+                  <th class="py-3 px-4">Audited By / Notes</th>
+                  <th class="py-3 px-4 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody id="handovers-table-body" class="divide-y divide-slate-100">
+                <tr>
+                  <td colspan="9" class="text-center py-8 text-slate-400">Loading handovers...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>

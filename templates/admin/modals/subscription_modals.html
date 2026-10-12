@@ -1,0 +1,508 @@
+<!-- MODAL: Create Subscription Plan -->
+  <div id="create-plan-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 hidden">
+    <div class="modal-dialog max-w-lg w-full p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-8 h-8 rounded-xl bg-brand-surface text-brand flex items-center justify-center">
+            <i data-lucide="sparkles" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-slate-900">Create Subscription Plan</h3>
+            <p class="text-[11px] text-slate-500">Define milk package, rate, and delivery frequency</p>
+          </div>
+        </div>
+        <button onclick="closeCreatePlanModal()" class="modal-close-btn"><i data-lucide="x" class="w-4 h-4"></i></button>
+      </div>
+      <div class="space-y-3">
+        <div id="new-plan-product-error" class="hidden p-2.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center justify-between">
+          <span id="new-plan-product-error-text">Failed to load active products.</span>
+          <button type="button" onclick="loadProductsForPlanModal()" class="ml-2 font-bold underline hover:text-red-900">Retry</button>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Plan Name *</label>
+          <input type="text" id="new-plan-name" placeholder="e.g. Pure Cow Milk Daily 1L" class="admin-input" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Product *</label>
+          <select id="new-plan-product" onchange="onPlanProductChange()" class="admin-input bg-white"></select>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Quantity *</label>
+            <input type="number" step="0.5" id="new-plan-quantity" value="1.0" class="admin-input" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Unit *</label>
+            <input type="text" id="new-plan-unit" value="litre" class="admin-input" />
+          </div>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Frequency *</label>
+            <select id="new-plan-frequency" class="admin-input bg-white">
+              <option value="daily">Daily</option>
+              <option value="alternate">Alternate Days</option>
+              <option value="weekly">Weekly</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Price Per Unit (₹) *</label>
+            <input type="number" step="0.5" id="new-plan-price" placeholder="Rate per unit" class="admin-input" />
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Schedule Description</label>
+          <input type="text" id="new-plan-schedule" value="Morning Delivery (5:30 AM - 7:30 AM)" class="admin-input" />
+        </div>
+        <div class="pt-1">
+          <label class="flex items-center space-x-2 text-xs font-semibold text-slate-700 cursor-pointer">
+            <input type="checkbox" id="new-plan-active" checked class="rounded border-slate-300 text-brand" />
+            <span>Active & Visible to Customers in Mobile App</span>
+          </label>
+        </div>
+      </div>
+      <div class="flex items-center space-x-2 pt-3 border-t border-slate-100">
+        <button onclick="submitCreatePlan()" class="flex-1 bg-brand hover:bg-brand-dark text-white font-bold py-2.5 px-4 rounded-xl text-xs transition shadow-xs flex items-center justify-center space-x-1.5">
+          <i data-lucide="check" class="w-4 h-4"></i>
+          <span>Create Plan</span>
+        </button>
+        <button onclick="closeCreatePlanModal()" class="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold transition">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+<!-- MODAL: Edit Subscription Plan -->
+  <div id="edit-plan-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 hidden">
+    <div class="modal-dialog max-w-lg w-full p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+            <i data-lucide="edit-3" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-slate-900">Edit Subscription Plan</h3>
+            <p class="text-[11px] text-slate-500">Update rates, delivery schedule, and status</p>
+          </div>
+        </div>
+        <button onclick="closeEditPlanModal()" class="modal-close-btn"><i data-lucide="x" class="w-4 h-4"></i></button>
+      </div>
+      <input type="hidden" id="edit-plan-id" />
+      <div class="space-y-3">
+        <div id="edit-plan-product-error" class="hidden p-2.5 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center justify-between">
+          <span id="edit-plan-product-error-text">Failed to load active products.</span>
+          <button type="button" onclick="loadProductsForPlanModal()" class="ml-2 font-bold underline hover:text-red-900">Retry</button>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Plan Name *</label>
+          <input type="text" id="edit-plan-name" class="admin-input" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Product *</label>
+          <select id="edit-plan-product" onchange="onEditPlanProductChange()" class="admin-input bg-white"></select>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Quantity *</label>
+            <input type="number" step="0.5" id="edit-plan-quantity" class="admin-input" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Unit *</label>
+            <input type="text" id="edit-plan-unit" class="admin-input" />
+          </div>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Frequency *</label>
+            <select id="edit-plan-frequency" class="admin-input bg-white">
+              <option value="daily">Daily</option>
+              <option value="alternate">Alternate Days</option>
+              <option value="weekly">Weekly</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Price Per Unit (₹) *</label>
+            <input type="number" step="0.5" id="edit-plan-price" class="admin-input" />
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Schedule Description</label>
+          <input type="text" id="edit-plan-schedule" class="admin-input" />
+        </div>
+        <div class="pt-1">
+          <label class="flex items-center space-x-2 text-xs font-semibold text-slate-700 cursor-pointer">
+            <input type="checkbox" id="edit-plan-active" class="rounded border-slate-300 text-brand" />
+            <span>Active & Visible in Mobile App</span>
+          </label>
+        </div>
+      </div>
+      <div class="flex items-center space-x-2 pt-3 border-t border-slate-100">
+        <button onclick="submitUpdatePlan()" class="flex-1 bg-brand hover:bg-brand-dark text-white font-bold py-2.5 px-4 rounded-xl text-xs transition shadow-xs flex items-center justify-center space-x-1.5">
+          <i data-lucide="check" class="w-4 h-4"></i>
+          <span>Save Plan Changes</span>
+        </button>
+        <button onclick="closeEditPlanModal()" class="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold transition">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+<!-- MODAL: Approve & Activate Pending Subscription -->
+  <div id="approve-sub-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 hidden">
+    <div class="modal-dialog max-w-lg w-full p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
+            <i data-lucide="check-circle" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-slate-900" id="approve-modal-title">Approve & Activate Subscription</h3>
+            <p class="text-[11px] text-slate-500">Confirm delivery schedule, slot, address, and optionally assign delivery partner.</p>
+          </div>
+        </div>
+        <button onclick="closeApproveSubModal()" class="modal-close-btn"><i data-lucide="x" class="w-4 h-4"></i></button>
+      </div>
+      <input type="hidden" id="approve-sub-id" />
+      <div class="p-3.5 bg-amber-50/70 border border-amber-200/80 rounded-xl space-y-1.5 text-xs text-slate-700">
+        <div class="flex justify-between items-center"><span class="font-semibold text-slate-500">Customer:</span><span id="approve-cust-name" class="font-bold text-slate-900">—</span></div>
+        <div class="flex justify-between items-center"><span class="font-semibold text-slate-500">Requested Plan:</span><span id="approve-plan-name" class="font-bold text-emerald-800">—</span></div>
+        <div class="flex justify-between items-center"><span class="font-semibold text-slate-500">Delivery Address:</span><span id="approve-addr-text" class="text-right truncate max-w-xs font-medium text-slate-800">—</span></div>
+      </div>
+      <div class="space-y-3 pt-1">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Confirmed Quantity (L/Units) *</label>
+            <input type="number" step="0.5" id="approve-sub-qty" class="admin-input" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Start Date *</label>
+            <input type="date" id="approve-sub-start-date" class="admin-input" />
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Delivery Slot</label>
+          <select id="approve-sub-slot" class="admin-input bg-white">
+            <option value="">Morning Delivery (5:30 AM - 7:30 AM)</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Assign Delivery Partner <span class="text-slate-400 font-normal">(Optional)</span></label>
+          <select id="approve-sub-boy" class="admin-input bg-white">
+            <option value="">-- Unassigned (Assign later) --</option>
+          </select>
+          <p class="text-[11px] text-slate-400 mt-1">If unassigned, the subscription will activate without automatically assigning any delivery partner until you explicitly assign one.</p>
+        </div>
+      </div>
+      <div class="flex items-center space-x-2 pt-3 border-t border-slate-100">
+        <button onclick="submitApproveSub()" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition shadow-xs flex items-center justify-center space-x-1.5">
+          <i data-lucide="check" class="w-4 h-4"></i>
+          <span>Approve & Activate</span>
+        </button>
+        <button onclick="closeApproveSubModal()" class="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold transition">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+<!-- MODAL: Assign Delivery Partner to Subscription -->
+  <div id="assign-sub-partner-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 hidden">
+    <div class="modal-dialog max-w-md w-full p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+            <i data-lucide="truck" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-slate-900" id="assign-partner-modal-title">Assign Delivery Partner</h3>
+            <p class="text-[11px] text-slate-500">Select an active delivery partner for this subscription.</p>
+          </div>
+        </div>
+        <button onclick="closeAssignSubPartnerModal()" class="modal-close-btn">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <input type="hidden" id="assign-sub-id" />
+      <div class="p-3.5 bg-slate-50 rounded-xl space-y-1.5 text-xs border border-slate-100">
+        <div class="flex justify-between items-center"><span class="text-slate-500 font-semibold">Subscription:</span><span id="assign-sub-num" class="font-bold text-slate-900 font-mono">—</span></div>
+        <div class="flex justify-between items-center"><span class="text-slate-500 font-semibold">Customer:</span><span id="assign-sub-cust" class="font-bold text-slate-900">—</span></div>
+        <div class="flex justify-between items-center"><span class="text-slate-500 font-semibold">Address:</span><span id="assign-sub-addr" class="font-medium text-slate-800 text-right truncate max-w-[200px]">—</span></div>
+        <div class="flex justify-between items-center"><span class="text-slate-500 font-semibold">Current Partner:</span><span id="assign-sub-current-boy" class="font-semibold text-amber-700">—</span></div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-700 mb-1">Select Delivery Partner *</label>
+        <select id="assign-sub-boy-select" class="admin-input bg-white">
+          <option value="">-- Unassigned --</option>
+        </select>
+        <p class="text-[11px] text-slate-400 mt-1">Only active delivery partners are displayed. Daily deliveries will be automatically updated.</p>
+      </div>
+
+      <div class="flex items-center space-x-2 pt-2 border-t border-slate-100">
+        <button onclick="submitAssignSubPartner()" class="flex-1 bg-brand hover:bg-brand-dark text-white font-bold py-2.5 px-4 rounded-xl text-xs transition shadow-xs flex items-center justify-center space-x-1.5">
+          <i data-lucide="check" class="w-4 h-4"></i>
+          <span>Save Partner Assignment</span>
+        </button>
+        <button onclick="closeAssignSubPartnerModal()" class="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold transition">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+<!-- MODAL: Confirm Delete Subscription -->
+  <div id="confirm-delete-sub-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 hidden">
+    <div class="modal-dialog max-w-md w-full p-6 space-y-4">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center shrink-0">
+          <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h3 class="text-base font-bold text-slate-900">Delete this subscription?</h3>
+          <p class="text-xs text-slate-500" id="delete-sub-subtitle">Are you sure you want to remove this subscription?</p>
+        </div>
+      </div>
+
+      <input type="hidden" id="delete-sub-id" />
+      <div class="p-3 bg-red-50/60 border border-red-200 rounded-xl space-y-1 text-xs text-slate-700">
+        <div class="flex justify-between"><span class="text-slate-500 font-semibold">Subscription:</span><span id="delete-sub-title-text" class="font-bold text-slate-900 font-mono">#—</span></div>
+        <div class="flex justify-between"><span class="text-slate-500 font-semibold">Customer:</span><span id="delete-sub-cust-name" class="font-bold text-slate-900">—</span></div>
+        <div class="flex justify-between"><span class="text-slate-500 font-semibold">Status:</span><span id="delete-sub-status-text" class="font-semibold uppercase text-red-700">—</span></div>
+      </div>
+
+      <p class="text-[11px] text-slate-500 bg-slate-50 p-2.5 rounded-lg border border-slate-100" id="delete-sub-note">
+        Historical delivery, order, and cash collection records will remain fully preserved in reports and audit logs.
+      </p>
+
+      <div class="flex items-center space-x-3 pt-2 border-t border-slate-100">
+        <button id="delete-sub-confirm-btn" onclick="executeDeleteSubscription()" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition shadow-xs flex items-center justify-center space-x-1.5">
+          <i data-lucide="trash-2" class="w-4 h-4"></i>
+          <span>Confirm Delete</span>
+        </button>
+        <button onclick="closeDeleteSubModal()" class="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold transition">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+<!-- MODAL: Assign Plan to Customer (Admin Creation) -->
+  <div id="create-subscription-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 hidden">
+    <div class="modal-dialog max-w-lg w-full p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-8 h-8 rounded-xl bg-brand-surface text-brand flex items-center justify-center">
+            <i data-lucide="calendar-plus" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-slate-900">Assign Subscription Plan to Customer</h3>
+            <p class="text-[11px] text-slate-500">Configure customer recurring milk delivery</p>
+          </div>
+        </div>
+        <button onclick="closeCreateSubscriptionModal()" class="modal-close-btn"><i data-lucide="x" class="w-4 h-4"></i></button>
+      </div>
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Select Customer *</label>
+          <select id="sub-customer-select" class="admin-input bg-white"></select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Select Predefined Plan *</label>
+          <select id="sub-plan-select" onchange="onSubPlanDropdownChange()" class="admin-input bg-white">
+            <option value="">-- Choose a Predefined Plan --</option>
+          </select>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Product</label>
+            <select id="sub-product-select" class="admin-input bg-white"></select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Daily Quantity (Units/L) *</label>
+            <input type="number" step="0.5" id="sub-quantity-input" value="1.0" class="admin-input" />
+          </div>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Start Date</label>
+            <input type="date" id="sub-start-date" class="admin-input" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">End Date</label>
+            <input type="date" id="sub-end-date" class="admin-input" />
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Assign Delivery Partner</label>
+          <select id="sub-boy-select" class="admin-input bg-white">
+            <option value="">-- Unassigned --</option>
+          </select>
+        </div>
+      </div>
+      <div class="flex items-center space-x-2 pt-3 border-t border-slate-100">
+        <button onclick="submitCreateSubscription()" class="flex-1 bg-brand hover:bg-brand-dark text-white font-bold py-2.5 px-4 rounded-xl text-xs transition shadow-xs flex items-center justify-center space-x-1.5">
+          <i data-lucide="check" class="w-4 h-4"></i>
+          <span>Activate Subscription</span>
+        </button>
+        <button onclick="closeCreateSubscriptionModal()" class="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold transition">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+<!-- MODAL: View Customer Subscription 360 -->
+  <div id="view-subscription-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 hidden">
+    <div class="modal-dialog max-w-lg w-full p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-8 h-8 rounded-xl bg-brand-surface text-brand flex items-center justify-center">
+            <i data-lucide="calendar" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-slate-900" id="view-sub-modal-title">Subscription Details</h3>
+            <p class="text-[11px] text-slate-500">Live subscription status, customer info, rate, and delivery partner.</p>
+          </div>
+        </div>
+        <button onclick="closeViewSubscriptionModal()" class="modal-close-btn">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div class="p-3.5 bg-slate-50 rounded-xl space-y-2 border border-slate-100">
+          <div class="flex justify-between items-center">
+            <span class="text-slate-500 font-semibold">Subscription ID:</span>
+            <span class="font-bold text-slate-900 font-mono" id="view-sub-id">#—</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-slate-500 font-semibold">Customer:</span>
+            <span class="font-bold text-slate-900" id="view-sub-cust"></span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-slate-500 font-semibold">Phone:</span>
+            <span class="font-medium text-slate-700 font-mono" id="view-sub-phone"></span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-slate-500 font-semibold">Delivery Address:</span>
+            <span class="font-medium text-slate-800 text-right max-w-xs truncate" id="view-sub-address"></span>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2 p-3 bg-emerald-50/50 rounded-xl border border-emerald-100 text-xs">
+          <div>
+            <div class="text-[11px] text-slate-500 font-semibold">Plan / Product</div>
+            <div class="font-bold text-emerald-900 mt-0.5" id="view-sub-product">—</div>
+          </div>
+          <div>
+            <div class="text-[11px] text-slate-500 font-semibold">Quantity & Rate</div>
+            <div class="font-bold text-slate-900 mt-0.5" id="view-sub-rate">—</div>
+          </div>
+          <div class="mt-2">
+            <div class="text-[11px] text-slate-500 font-semibold">Delivery Slot</div>
+            <div class="font-medium text-slate-800 mt-0.5" id="view-sub-slot">—</div>
+          </div>
+          <div class="mt-2">
+            <div class="text-[11px] text-slate-500 font-semibold">Assigned Partner</div>
+            <div class="font-bold text-slate-900 mt-0.5" id="view-sub-partner">—</div>
+          </div>
+        </div>
+
+        <div class="p-3 bg-slate-50 rounded-xl space-y-1.5 border border-slate-100">
+          <div class="flex justify-between items-center">
+            <span class="text-slate-500 font-semibold">Current Status:</span>
+            <span id="view-sub-status-badge" class="px-2.5 py-0.5 rounded-full text-[11px] font-bold">—</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-slate-500 font-semibold">Start Date:</span>
+            <span class="font-medium text-slate-800" id="view-sub-start">—</span>
+          </div>
+          <div class="flex justify-between items-center">
+            <span class="text-slate-500 font-semibold">End Date:</span>
+            <span class="font-medium text-slate-800" id="view-sub-end">—</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex items-center space-x-2 pt-2 border-t border-slate-100">
+        <button id="view-sub-edit-btn" class="flex-1 bg-brand hover:bg-brand-dark text-white font-bold py-2.5 px-4 rounded-xl text-xs transition flex items-center justify-center space-x-1.5 shadow-xs">
+          <i data-lucide="edit" class="w-4 h-4"></i>
+          <span>Edit Subscription</span>
+        </button>
+        <button onclick="closeViewSubscriptionModal()" class="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold transition">Close</button>
+      </div>
+    </div>
+  </div>
+
+<!-- MODAL: Edit Customer Subscription -->
+  <div id="edit-subscription-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 z-50 hidden">
+    <div class="modal-dialog max-w-lg w-full p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div class="flex items-center space-x-2.5">
+          <div class="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
+            <i data-lucide="edit" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-slate-900" id="edit-sub-modal-title">Edit Subscription</h3>
+            <p class="text-[11px] text-slate-500">Update daily quantity, schedule, status, and assigned delivery partner.</p>
+          </div>
+        </div>
+        <button onclick="closeEditSubscriptionModal()" class="modal-close-btn">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <input type="hidden" id="edit-sub-id" />
+      <div class="p-3.5 bg-slate-50 rounded-xl space-y-1 text-xs border border-slate-100">
+        <div class="flex justify-between"><span class="text-slate-500 font-semibold">Customer:</span><span id="edit-sub-cust-name" class="font-bold text-slate-900">—</span></div>
+        <div class="flex justify-between"><span class="text-slate-500 font-semibold">Product:</span><span id="edit-sub-prod-name" class="font-bold text-emerald-800">—</span></div>
+      </div>
+
+      <div class="space-y-3 pt-1">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Daily Quantity *</label>
+            <input type="number" step="0.5" id="edit-sub-quantity" class="admin-input" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Price Per Unit (₹) *</label>
+            <input type="number" step="0.5" id="edit-sub-rate" class="admin-input" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Subscription Status *</label>
+            <select id="edit-sub-status" class="admin-input bg-white">
+              <option value="pending">Pending Approval</option>
+              <option value="active">Active</option>
+              <option value="paused">Paused</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Delivery Slot</label>
+            <select id="edit-sub-slot" class="admin-input bg-white"></select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Assigned Delivery Partner</label>
+          <select id="edit-sub-boy" class="admin-input bg-white">
+            <option value="">-- Unassigned --</option>
+          </select>
+          <p class="text-[11px] text-slate-400 mt-1">Pending future morning deliveries will automatically be assigned to this delivery partner.</p>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Start Date</label>
+            <input type="date" id="edit-sub-start-date" class="admin-input" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">End Date</label>
+            <input type="date" id="edit-sub-end-date" class="admin-input" />
+          </div>
+        </div>
+      </div>
+
+      <div class="flex items-center space-x-2 pt-3 border-t border-slate-100">
+        <button onclick="submitUpdateSubscription()" class="flex-1 bg-brand hover:bg-brand-dark text-white font-bold py-2.5 px-4 rounded-xl text-xs transition shadow-xs flex items-center justify-center space-x-1.5">
+          <i data-lucide="check" class="w-4 h-4"></i>
+          <span>Save Changes</span>
+        </button>
+        <button onclick="closeEditSubscriptionModal()" class="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold transition">Cancel</button>
+      </div>
+    </div>
+  </div>

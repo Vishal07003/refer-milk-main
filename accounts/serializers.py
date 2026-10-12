@@ -16,15 +16,17 @@ class SendOTPSerializer(serializers.Serializer):
         return value
 
     def create_otp(self, mobile_number):
+        from .sms_service import send_sms_otp_via_2factor
+
         OTP.objects.filter(mobile_number=mobile_number, is_used=False).update(
             is_used=True
         )
         otp_code = f"{random.randint(100000, 999999)}"
         otp = OTP.objects.create(mobile_number=mobile_number, otp=otp_code)
-        print(f"\n{'='*40}")
-        print(f"  MOCK OTP for {mobile_number}: {otp_code}")
-        print(f"{'='*40}\n")
-        return otp_code
+
+        # Dispatch via 2Factor SMS gateway
+        success, message, session_id = send_sms_otp_via_2factor(mobile_number, otp_code)
+        return otp_code, success, message
 
 
 class VerifyOTPSerializer(serializers.Serializer):

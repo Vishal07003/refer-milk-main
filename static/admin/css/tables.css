@@ -1,0 +1,49 @@
+/* Table & rows polish */
+.admin-table-container {
+  overflow-x: auto;
+  border-radius: 0.75rem;
+  border: 1px solid #E2E8F0;
+  background-color: #FFFFFF;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.75rem; /* text-xs */
+}
+
+table thead th {
+  white-space: nowrap;
+  background-color: #F8FAFC;
+  color: #64748B;
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.6875rem; /* 11px */
+  letter-spacing: 0.05em;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #E2E8F0;
+}
+
+table tbody tr {
+  border-bottom: 1px solid #F1F5F9;
+  transition: background-color 0.1s ease-in-out;
+}
+
+table tbody tr:hover {
+  background-color: #F8FAFC;
+}
+
+table tbody td {
+  padding: 0.75rem 1rem;
+  vertical-align: middle;
+  color: #334155;
+}
+
+/* Empty / Loading State polish */
+.table-empty-state {
+  text-align: center;
+  padding: 2.5rem 1rem;
+  color: #94A3B8;
+  font-size: 0.75rem;
+  font-weight: 500;
+}

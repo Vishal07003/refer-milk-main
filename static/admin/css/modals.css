@@ -1,0 +1,38 @@
+/* Modal transitions and backdrop */
+.backdrop-blur-xs {
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+/* Modal dialog card polish */
+.modal-dialog {
+  background-color: #FFFFFF;
+  border-radius: 1.25rem; /* 20px */
+  border: 1px solid #E2E8F0;
+  box-shadow: 0 20px 25px -5px rgba(15, 23, 42, 0.1), 0 8px 10px -6px rgba(15, 23, 42, 0.08);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Internal modal body scrolling */
+.modal-body-scroll {
+  overflow-y: auto;
+  max-height: calc(90vh - 130px);
+  padding-right: 2px;
+}
+
+/* Close button micro-interaction */
+.modal-close-btn {
+  color: #94A3B8;
+  border-radius: 0.5rem;
+  padding: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease-in-out;
+}
+.modal-close-btn:hover {
+  color: #1E293B;
+  background-color: #F1F5F9;
+}

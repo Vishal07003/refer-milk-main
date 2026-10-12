@@ -1,0 +1,48 @@
+<!-- SECTION 10: REFERRALS -->
+      <div id="content-referrals" class="space-y-4 hidden">
+        <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 class="text-base font-bold text-slate-900">Referral Program Management</h3>
+              <p class="text-xs text-slate-500">Audit customer referral invitations, rewards, and qualification statuses.</p>
+            </div>
+          </div>
+
+          <!-- Filter & Search Toolbar for Referrals -->
+          <div class="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-100">
+            <div class="flex items-center space-x-2">
+              <span class="text-xs font-semibold text-slate-500">Status:</span>
+              <div class="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-50 text-xs">
+                <button onclick="filterReferralStatus('all')" id="ref-filter-all" class="px-2.5 py-1 rounded-md font-semibold bg-white text-slate-900 shadow-xs transition">All</button>
+                <button onclick="filterReferralStatus('successful')" id="ref-filter-successful" class="px-2.5 py-1 rounded-md font-medium text-slate-600 hover:text-slate-900 transition">Successful</button>
+                <button onclick="filterReferralStatus('pending')" id="ref-filter-pending" class="px-2.5 py-1 rounded-md font-medium text-slate-600 hover:text-slate-900 transition">Pending</button>
+                <button onclick="filterReferralStatus('failed')" id="ref-filter-failed" class="px-2.5 py-1 rounded-md font-medium text-slate-600 hover:text-slate-900 transition">Failed</button>
+              </div>
+            </div>
+            <div class="search-input-wrapper w-full sm:w-64">
+              <i data-lucide="search" class="search-icon"></i>
+              <input type="text" id="ref-search-input" onkeyup="debounceReferralSearch()" placeholder="Search code, customer, mobile..." />
+            </div>
+          </div>
+
+          <div class="overflow-x-auto rounded-xl border border-slate-200">
+            <table class="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold uppercase tracking-wider text-[11px]">
+                  <th class="py-3 px-4">Referral #</th>
+                  <th class="py-3 px-4">Referrer (Customer)</th>
+                  <th class="py-3 px-4">Referred User</th>
+                  <th class="py-3 px-4">Referral Code</th>
+                  <th class="py-3 px-4">Reward</th>
+                  <th class="py-3 px-4">Status</th>
+                  <th class="py-3 px-4">Created Date</th>
+                  <th class="py-3 px-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="referrals-table-body" class="divide-y divide-slate-100">
+                <tr><td colspan="8" class="text-center py-8 text-slate-400">Loading referrals...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>

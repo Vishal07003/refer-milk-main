@@ -34,8 +34,15 @@ class SendOTPView(APIView):
         serializer = SendOTPSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         mobile_number = serializer.validated_data["mobile_number"]
-        serializer.create_otp(mobile_number)
-        return Response({"msg": "OTP sent successfully."}, status=200)
+        otp_code, success, message = serializer.create_otp(mobile_number)
+
+        if not success:
+            return Response(
+                {"error": message or "Failed to deliver OTP SMS via provider."},
+                status=400,
+            )
+
+        return Response({"msg": message or "OTP sent successfully."}, status=200)
 
 
 class VerifyOTPView(APIView):
@@ -590,50 +597,12 @@ class WalletTransactionHistoryView(APIView):
 class RazorpayWebhookView(APIView):
     permission_classes = []
 
-    @extend_schema(summary="Razorpay Payment Webhook")
+    @extend_schema(summary="Razorpay Payment Webhook (Disabled - Cash Only)")
     def post(self, request):
-        signature = request.headers.get("X-Razorpay-Signature")
-        webhook_secret = getattr(settings, "RAZORPAY_WEBHOOK_SECRET", "")
-
-        if webhook_secret and signature:
-            try:
-                client = razorpay.Client(
-                    auth=(
-                        getattr(settings, "RAZORPAY_KEY_ID", ""),
-                        getattr(settings, "RAZORPAY_KEY_SECRET", ""),
-                    )
-                )
-                client.utility.verify_webhook_signature(
-                    request.body.decode("utf-8"), signature, webhook_secret
-                )
-            except Exception:
-                return Response({"msg": "Invalid webhook signature."}, status=400)
-
-        payload = request.data
-        event = payload.get("event")
-
-        if event in ("payment.captured", "order.paid"):
-            payment_entity = (
-                payload.get("payload", {}).get("payment", {}).get("entity", {})
-            )
-            order_id = payment_entity.get("order_id")
-            payment_id = payment_entity.get("id")
-
-            if order_id:
-                with db_transaction.atomic():
-                    tx = WalletTransaction.objects.filter(
-                        razorpay_order_id=order_id
-                    ).first()
-                    if tx and tx.status != "success":
-                        wallet = tx.wallet
-                        tx.status = "success"
-                        tx.razorpay_payment_id = payment_id or tx.razorpay_payment_id
-                        tx.save(update_fields=["status", "razorpay_payment_id"])
-
-                        wallet.balance += tx.amount
-                        wallet.save(update_fields=["balance", "updated_at"])
-
-        return Response({"status": "ok"}, status=200)
+        return Response(
+            {"msg": "Online payments and webhooks are disabled. DudhDairy is strictly Cash Only."},
+            status=410,
+        )
 
 
 class DeviceTokenView(APIView):

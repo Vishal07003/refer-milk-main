@@ -1,0 +1,48 @@
+<!-- SECTION 9: CATEGORIES CRUD -->
+      <div id="content-categories" class="space-y-4 hidden">
+        <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 class="text-base font-bold text-slate-900">Product Categories</h3>
+              <p class="text-xs text-slate-500">Group catalog items into categories (Milk, Ghee, Curd, Paneer, etc.).</p>
+            </div>
+            <button onclick="openCreateCategoryModal()" class="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-brand hover:bg-brand-dark text-white text-xs font-semibold transition shadow-xs">
+              <i data-lucide="plus" class="w-4 h-4"></i>
+              <span>Add Category</span>
+            </button>
+          </div>
+
+          <!-- Filter & Search Toolbar for Categories -->
+          <div class="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-100">
+            <div class="flex items-center space-x-2">
+              <span class="text-xs font-semibold text-slate-500">Status:</span>
+              <div class="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-50 text-xs">
+                <button onclick="filterCategoryStatus('all')" id="cat-filter-all" class="px-2.5 py-1 rounded-md font-semibold bg-white text-slate-900 shadow-xs transition">All</button>
+                <button onclick="filterCategoryStatus('active')" id="cat-filter-active" class="px-2.5 py-1 rounded-md font-medium text-slate-600 hover:text-slate-900 transition">Active</button>
+                <button onclick="filterCategoryStatus('inactive')" id="cat-filter-inactive" class="px-2.5 py-1 rounded-md font-medium text-slate-600 hover:text-slate-900 transition">Inactive</button>
+              </div>
+            </div>
+            <div class="search-input-wrapper w-full sm:w-64">
+              <i data-lucide="search" class="search-icon"></i>
+              <input type="text" id="category-search-input" onkeyup="debounceCategorySearch()" placeholder="Search category name, details..." />
+            </div>
+          </div>
+
+          <div class="overflow-x-auto rounded-xl border border-slate-200">
+            <table class="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold uppercase tracking-wider text-[11px]">
+                  <th class="py-3 px-4">Category Name</th>
+                  <th class="py-3 px-4">Description</th>
+                  <th class="py-3 px-4">Products Linked</th>
+                  <th class="py-3 px-4">Status</th>
+                  <th class="py-3 px-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="categories-table-body" class="divide-y divide-slate-100">
+                <tr><td colspan="5" class="text-center py-8 text-slate-400">Loading categories...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>

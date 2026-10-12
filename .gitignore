@@ -1,20 +1,29 @@
-# Django / Python
+# Python / Django
 __pycache__/
 *.py[cod]
 *$py.class
-
 *.egg-info/
+
+# Virtual environments
 .venv/
 venv/
 env/
 
+# Testing and coverage
 .pytest_cache/
 .mypy_cache/
+.coverage
+htmlcov/
 
-# Django Database & Media
+# Django database and logs
 db.sqlite3
+db.sqlite3-*
 *.log
+
+# User-uploaded media
 media/
+
+# Collected static files
 staticfiles/
 
 # Environment files
@@ -22,12 +31,15 @@ staticfiles/
 .env.*
 !.env.example
 
-# Firebase Admin Secret
-firebase/dudhdairy-bc937-firebase-adminsdk-fbsvc-369669eefa.json
+# Firebase Admin credentials
 firebase/*.json
-# IDE & OS
+
+# IDE and OS
 .vscode/
 .idea/
 *.iml
 Thumbs.db
 Desktop.ini
+
+# Backup requirements file
+requirements-backup.txt

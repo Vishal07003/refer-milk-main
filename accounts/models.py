@@ -279,3 +279,44 @@ class DeviceToken(models.Model):
 
     def __str__(self):
         return f"{self.user.mobile_number} - {self.platform} - {'Active' if self.is_active else 'Inactive'}"
+
+
+class SystemSetting(models.Model):
+    """
+    Key-Value system settings for DudhDairy platform (cash discount, delivery slot windows, etc.)
+    """
+    key = models.CharField(max_length=100, unique=True)
+    value = models.TextField()
+    description = models.CharField(max_length=255, blank=True, default='')
+    updated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='updated_settings')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "System Setting"
+        verbose_name_plural = "System Settings"
+        ordering = ["key"]
+
+    def __str__(self):
+        return f"{self.key}: {self.value}"
+
+
+class AdminAuditLog(models.Model):
+    """
+    Immutable audit log recording admin actions, status transitions, and data changes.
+    """
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='audit_logs')
+    module = models.CharField(max_length=50)  # customers, products, orders, cash_collection, etc.
+    action = models.CharField(max_length=50)  # create, update, delete, status_change, verify, reconcile
+    target_id = models.CharField(max_length=50, blank=True, default='')
+    details = models.TextField(blank=True, default='')
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Admin Audit Log"
+        verbose_name_plural = "Admin Audit Logs"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"[{self.created_at.strftime('%Y-%m-%d %H:%M')}] {self.user} - {self.module}:{self.action}"
+

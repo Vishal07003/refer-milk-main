@@ -1,3 +1,4 @@
+from decimal import Decimal
 from rest_framework import serializers
 
 from accounts.models import Address, DeliveryBoyProfile, User
@@ -149,10 +150,11 @@ class DeliveryAddressMinimalSerializer(serializers.ModelSerializer):
 
 class DeliveryOrderItemMinimalSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source='product.name', read_only=True)
+    product_unit = serializers.CharField(source='product.get_unit_display', read_only=True)
 
     class Meta:
         model = OrderItem
-        fields = ('id', 'product_name', 'quantity', 'price')
+        fields = ('id', 'product_name', 'product_unit', 'quantity', 'price')
 
 
 class DeliveryOrderSerializer(serializers.ModelSerializer):
@@ -161,23 +163,26 @@ class DeliveryOrderSerializer(serializers.ModelSerializer):
     items = DeliveryOrderItemMinimalSerializer(many=True, read_only=True)
     delivery_slot = serializers.CharField(source='delivery_slot.name', read_only=True)
     total_items = serializers.SerializerMethodField()
-    payment_status = serializers.SerializerMethodField()
+    payment_method = serializers.CharField(read_only=True)
+    payment_status = serializers.CharField(read_only=True)
+    amount_to_collect = serializers.SerializerMethodField()
 
     class Meta:
         model = Order
         fields = (
             'id', 'customer', 'delivery_address', 'items',
             'delivery_slot', 'total_items', 'final_amount',
-            'payment_status', 'status', 'created_at', 'delivered_at',
+            'payment_method', 'payment_status', 'amount_to_collect',
+            'status', 'created_at', 'delivered_at',
         )
 
     def get_total_items(self, obj):
         return sum(item.quantity for item in obj.items.all())
 
-    def get_payment_status(self, obj):
-        if getattr(obj, 'razorpay_payment_id', None) or obj.status in ['delivered', 'confirmed']:
-            return 'paid'
-        return 'pending'
+    def get_amount_to_collect(self, obj):
+        if obj.payment_method in ('cash', 'upi_at_delivery') and obj.payment_status == 'pending':
+            return str(obj.final_amount)
+        return '0.00'
 
 
 class DailyDeliverySerializer(serializers.ModelSerializer):
@@ -185,6 +190,8 @@ class DailyDeliverySerializer(serializers.ModelSerializer):
     delivery_address = DeliveryAddressMinimalSerializer(source='subscription.address', read_only=True)
     subscription_id = serializers.IntegerField(source='subscription.id', read_only=True)
     product_name = serializers.CharField(source='subscription.product.name', read_only=True)
+    product_unit = serializers.CharField(source='subscription.product.get_unit_display', read_only=True)
+    plan_unit = serializers.CharField(source='subscription.plan.unit', read_only=True, default='')
     quantity = serializers.DecimalField(source='subscription.quantity', max_digits=10, decimal_places=2, read_only=True)
     delivery_slot = serializers.CharField(source='subscription.delivery_slot.name', read_only=True)
 
@@ -192,8 +199,45 @@ class DailyDeliverySerializer(serializers.ModelSerializer):
         model = DailyDelivery
         fields = (
             'id', 'subscription_id', 'customer', 'delivery_address',
-            'product_name', 'quantity', 'delivery_date', 'delivery_slot',
+            'product_name', 'product_unit', 'plan_unit', 'quantity',
+            'delivery_date', 'delivery_slot',
             'status', 'delivered_at', 'notes', 'created_at', 'updated_at',
         )
         read_only_fields = ('id', 'delivered_at', 'created_at', 'updated_at')
+
+
+class CashHandoverSerializer(serializers.ModelSerializer):
+    delivery_boy_name = serializers.SerializerMethodField()
+    delivery_boy_mobile = serializers.CharField(source='delivery_boy.mobile_number', read_only=True)
+    confirmed_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        from .models import CashHandover
+        model = CashHandover
+        fields = (
+            'id', 'delivery_boy', 'delivery_boy_name', 'delivery_boy_mobile',
+            'submitted_amount', 'received_amount', 'discrepancy_amount',
+            'status', 'submitted_at', 'confirmed_at', 'confirmed_by',
+            'confirmed_by_name', 'delivery_notes', 'admin_notes',
+            'created_at', 'updated_at',
+        )
+        read_only_fields = (
+            'id', 'delivery_boy', 'discrepancy_amount', 'status',
+            'submitted_at', 'confirmed_at', 'confirmed_by', 'created_at', 'updated_at',
+        )
+
+    def get_delivery_boy_name(self, obj):
+        name = f"{obj.delivery_boy.first_name} {obj.delivery_boy.last_name}".strip()
+        return name or obj.delivery_boy.mobile_number
+
+    def get_confirmed_by_name(self, obj):
+        if obj.confirmed_by:
+            name = f"{obj.confirmed_by.first_name} {obj.confirmed_by.last_name}".strip()
+            return name or obj.confirmed_by.username or obj.confirmed_by.mobile_number
+        return None
+
+
+class SubmitCashHandoverSerializer(serializers.Serializer):
+    submitted_amount = serializers.DecimalField(max_digits=12, decimal_places=2, min_value=Decimal("0.01"))
+    delivery_notes = serializers.CharField(max_length=500, required=False, allow_blank=True, default='')
 

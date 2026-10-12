@@ -1,0 +1,79 @@
+<!-- SECTION 6B: CUSTOMER SUBSCRIPTIONS -->
+      <div id="content-subscriptions" class="space-y-5 hidden">
+        <div class="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs space-y-5">
+          <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <h3 class="text-lg font-bold text-slate-900 tracking-tight">Customer Subscriptions & Approvals</h3>
+              <p class="text-xs text-slate-500 mt-0.5">Customer requests from mobile app and Admin-assigned subscriptions. Approve requests to activate daily deliveries.</p>
+            </div>
+            <button onclick="openCreateSubscriptionModal()" class="flex items-center space-x-2 px-4 py-2.5 rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-bold transition shadow-xs">
+              <i data-lucide="plus" class="w-4 h-4 stroke-[2.5]"></i>
+              <span>Assign Plan to Customer</span>
+            </button>
+          </div>
+
+          <!-- Status Filters and Search Toolbar -->
+          <div class="flex flex-wrap items-center justify-between gap-3 pt-1">
+            <div class="flex flex-wrap items-center gap-2">
+              <button onclick="filterSubStatus('all')" id="sub-filter-all" class="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-800 text-white shadow-xs transition">All Subscriptions</button>
+              <button onclick="filterSubStatus('pending')" id="sub-filter-pending" class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 transition flex items-center space-x-1.5">
+                <span>Pending Approval</span>
+                <span id="sub-pending-badge" class="px-1.5 py-0.2 rounded-full bg-amber-100 text-amber-800 font-bold text-[10px]">0</span>
+              </button>
+              <button onclick="filterSubStatus('active')" id="sub-filter-active" class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 transition">Active</button>
+              <button onclick="filterSubStatus('paused')" id="sub-filter-paused" class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 transition">Paused</button>
+              <button onclick="filterSubStatus('cancelled')" id="sub-filter-cancelled" class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 transition">Cancelled</button>
+            </div>
+
+            <div class="flex items-center space-x-2 w-full sm:w-auto">
+              <div class="search-input-wrapper w-full sm:w-72">
+                <i data-lucide="search" class="search-icon"></i>
+                <input type="text" id="sub-search-input" onkeyup="debounceSubSearch()" placeholder="Search customer, phone, or plan..." />
+              </div>
+              <button class="p-2 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition" title="Filter options">
+                <i data-lucide="filter" class="w-4 h-4"></i>
+              </button>
+            </div>
+          </div>
+
+          <!-- Subscriptions Table -->
+          <div class="overflow-x-auto rounded-xl border border-slate-200/90">
+            <table class="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr class="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
+                  <th class="py-3.5 px-4">SUB #</th>
+                  <th class="py-3.5 px-4">CUSTOMER</th>
+                  <th class="py-3.5 px-4">SELECTED PLAN</th>
+                  <th class="py-3.5 px-4">QUANTITY & RATE</th>
+                  <th class="py-3.5 px-4">SLOT & START DATE</th>
+                  <th class="py-3.5 px-4">DELIVERY ADDRESS</th>
+                  <th class="py-3.5 px-4">ASSIGNED PARTNER</th>
+                  <th class="py-3.5 px-4">STATUS</th>
+                  <th class="py-3.5 px-4 text-right">ACTIONS</th>
+                </tr>
+              </thead>
+              <tbody id="subscriptions-table-body" class="divide-y divide-slate-100 bg-white">
+                <tr>
+                  <td colspan="9" class="text-center py-10 text-slate-400">Loading subscriptions...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Bottom Pagination & Records count bar -->
+          <div id="sub-pagination-bar" class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2 text-xs text-slate-500">
+            <div class="flex items-center space-x-2">
+              <span id="sub-count-display">Showing <strong class="text-slate-800" id="sub-count-shown">0</strong> of <strong class="text-slate-800" id="sub-count-total">0</strong> records</span>
+              <span class="text-slate-300">|</span>
+              <span class="text-slate-500 font-medium">10 per page</span>
+            </div>
+            <div class="flex items-center space-x-1.5" id="sub-pagination-controls">
+              <button class="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-50 text-xs font-medium transition">Previous</button>
+              <button class="w-7 h-7 rounded-lg bg-emerald-800 text-white font-bold text-xs flex items-center justify-center shadow-xs">1</button>
+              <button class="w-7 h-7 rounded-lg text-slate-700 hover:bg-slate-100 font-medium text-xs flex items-center justify-center transition">2</button>
+              <button class="w-7 h-7 rounded-lg text-slate-700 hover:bg-slate-100 font-medium text-xs flex items-center justify-center transition">3</button>
+              <button class="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-medium transition">Next</button>
+            </div>
+          </div>
+        </div>
+      </div>

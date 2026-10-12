@@ -1,0 +1,202 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DudhDairy — Admin Operations & Offline Collections Panel</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Google Fonts: Plus Jakarta Sans -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  
+  <!-- Chart.js CDN for Analytics -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              DEFAULT: '#2D5A36',
+              dark: '#1C3E24',
+              light: '#3C7347',
+              surface: '#F0FDF4',
+              border: '#DCFCE7'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      background-color: #F8FAFC;
+    }
+    .badge-verified {
+      background-color: #DCFCE7;
+      color: #15803D;
+      border: 1px solid #BBF7D0;
+    }
+    .badge-collected {
+      background-color: #FEF3C7;
+      color: #B45309;
+      border: 1px solid #FDE68A;
+    }
+    .badge-rejected {
+      background-color: #FEE2E2;
+      color: #B91C1C;
+      border: 1px solid #FECACA;
+    }
+    .badge-cash {
+      background-color: #ECFDF5;
+      color: #047857;
+      border: 1px solid #A7F3D0;
+    }
+    .badge-discrepancy {
+      background-color: #FEF2F2;
+      color: #DC2626;
+      border: 1px solid #FECACA;
+    }
+    .badge-submitted {
+      background-color: #FEF3C7;
+      color: #D97706;
+      border: 1px solid #FDE68A;
+    }
+  </style>
+
+  <!-- Modular CSS Files -->
+  <link rel="stylesheet" href="{% static 'admin/css/base.css' %}">
+  <link rel="stylesheet" href="{% static 'admin/css/layout.css' %}">
+  <link rel="stylesheet" href="{% static 'admin/css/components.css' %}">
+  <link rel="stylesheet" href="{% static 'admin/css/tables.css' %}">
+  <link rel="stylesheet" href="{% static 'admin/css/modals.css' %}">
+  <link rel="stylesheet" href="{% static 'admin/css/responsive.css' %}">
+</head>
+<body class="font-sans antialiased text-slate-800 flex h-screen overflow-hidden bg-slate-50">
+
+  <!-- Left Sidebar Partial -->
+  {% include "admin/partials/sidebar.html" %}
+
+  <!-- Mobile Sidebar Backdrop Overlay -->
+  <div id="sidebar-backdrop" onclick="toggleSidebar()" class="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-40 hidden lg:hidden transition-opacity"></div>
+
+  <!-- Right Content Area -->
+  <div class="flex-1 flex flex-col h-screen overflow-hidden min-w-0">
+
+    <!-- Top Navigation Header Partial -->
+    {% include "admin/partials/header.html" %}
+
+    <!-- Scrollable Workspace Body -->
+    <main class="flex-1 overflow-y-auto p-6 space-y-6">
+
+      <!-- SECTION 1: DASHBOARD & KPIS -->
+      {% include "admin/partials/dashboard.html" %}
+
+      <!-- SECTION: CASH HANDOVER & RECONCILIATION -->
+      {% include "admin/partials/cash_handover.html" %}
+
+      <!-- SECTION 2: ORDER CASH COLLECTIONS -->
+      {% include "admin/partials/cash_collection.html" %}
+
+      <!-- SECTION 3: ORDERS & DISPATCH -->
+      {% include "admin/partials/orders.html" %}
+
+      <!-- SECTION 4: DELIVERY BOYS & CASH IN HAND -->
+      {% include "admin/partials/delivery_boys.html" %}
+
+      <!-- SECTION 5: CUSTOMERS -->
+      {% include "admin/partials/customers.html" %}
+
+      <!-- SECTION 6A: SUBSCRIPTION PLANS -->
+      {% include "admin/partials/subscription_plans.html" %}
+
+      <!-- SECTION 6A-2: DELIVERY SLOTS -->
+      {% include "admin/partials/delivery_slots.html" %}
+
+      <!-- SECTION 6B: CUSTOMER SUBSCRIPTIONS -->
+      {% include "admin/partials/subscriptions.html" %}
+
+      <!-- SECTION 7: PRODUCTS -->
+      {% include "admin/partials/products.html" %}
+
+      <!-- SECTION 8: REPORTS & LEDGER -->
+      {% include "admin/partials/reports.html" %}
+
+      <!-- SECTION 9: CATEGORIES CRUD -->
+      {% include "admin/partials/categories.html" %}
+
+      <!-- SECTION 10: REFERRALS -->
+      {% include "admin/partials/referrals.html" %}
+
+      <!-- SECTION 11: NOTIFICATIONS -->
+      {% include "admin/partials/notifications.html" %}
+
+      <!-- SECTION 12: SETTINGS & AUDIT LOGS -->
+      {% include "admin/partials/settings.html" %}
+
+    </main>
+  </div>
+
+  <!-- MODALS -->
+  {% include "admin/modals/delivery_modals.html" %}
+  {% include "admin/modals/delivery_slot_modals.html" %}
+  {% include "admin/modals/product_modals.html" %}
+  {% include "admin/modals/customer_modals.html" %}
+  {% include "admin/modals/subscription_modals.html" %}
+  {% include "admin/modals/order_modals.html" %}
+  {% include "admin/modals/common_modals.html" %}
+
+  <!-- Toast Notification Container -->
+  <div id="toast" class="fixed bottom-6 right-6 z-50 transition transform duration-300 translate-y-20 opacity-0 bg-slate-900 text-white text-xs font-semibold py-3 px-5 rounded-xl shadow-lg flex items-center space-x-2">
+    <i data-lucide="info" class="w-4 h-4 text-emerald-400"></i>
+    <span id="toast-text">Success</span>
+  </div>
+
+  <!-- Modular JavaScript Modules in strict dependency order -->
+  <script src="{% static 'admin/js/core.js' %}?v=20261012"></script>
+  <script src="{% static 'admin/js/navigation.js' %}?v=20261012"></script>
+  <script src="{% static 'admin/js/dashboard.js' %}?v=20261012"></script>
+  <script src="{% static 'admin/js/cash_handover.js' %}?v=20261012"></script>
+  <script src="{% static 'admin/js/cash_collection.js' %}?v=20261012"></script>
+  <script src="{% static 'admin/js/orders.js' %}?v=20261012"></script>
+  <script src="{% static 'admin/js/delivery_boys.js' %}?v=20261012"></script>
+  <script src="{% static 'admin/js/customers.js' %}?v=20261012"></script>
+  <script src="{% static 'admin/js/subscription_plans.js' %}?v=20261012"></script>
+  <script src="{% static 'admin/js/delivery_slots.js' %}?v=20261012_v3"></script>
+  <script src="{% static 'admin/js/subscriptions.js' %}?v=20261012"></script>
+  <script src="{% static 'admin/js/products.js' %}?v=20261012"></script>
+  <script src="{% static 'admin/js/categories.js' %}?v=20261012"></script>
+  <script src="{% static 'admin/js/referrals.js' %}?v=20261012"></script>
+  <script src="{% static 'admin/js/notifications.js' %}?v=20261012"></script>
+  <script src="{% static 'admin/js/settings.js' %}?v=20261012"></script>
+  <script src="{% static 'admin/js/reports.js' %}?v=20261012"></script>
+
+  <!-- Initialization: Runs only after all script modules are loaded and defined -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      if (typeof switchTab === 'function') {
+        switchTab('dashboard');
+      }
+      if (window.lucide && typeof lucide.createIcons === 'function') {
+        lucide.createIcons();
+      }
+      if (typeof refreshAllData === 'function') {
+        refreshAllData();
+      }
+    });
+  </script>
+</body>
+</html>

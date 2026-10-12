@@ -1,0 +1,162 @@
+<!-- SECTION 8: REPORTS & LEDGER -->
+<div id="content-reports" class="space-y-4 hidden">
+  <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs space-y-5">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div>
+        <h3 class="text-base font-bold text-slate-900 flex items-center space-x-2">
+          <i data-lucide="file-bar-chart" class="w-5 h-5 text-brand"></i>
+          <span>Financial Reports & Cash Reconciliation Ledger</span>
+        </h3>
+        <p class="text-xs text-slate-500">Authoritative audit ledger of field cash collections, partner reconciliation, and confirmed hub handovers.</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <button onclick="exportReportsCSV()" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-semibold transition">
+          <i data-lucide="download" class="w-3.5 h-3.5"></i>
+          <span>Export Ledger CSV</span>
+        </button>
+        <button onclick="loadReportsData()" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-semibold transition">
+          <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+          <span>Refresh</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- DATE RANGE & PARTNER FILTERS -->
+    <div class="p-4 rounded-xl bg-slate-50 border border-slate-200">
+      <div class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+        <div>
+          <label class="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">Start Date</label>
+          <input type="date" id="report-filter-start" class="w-full text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-800 focus:outline-none focus:border-brand" />
+        </div>
+        <div>
+          <label class="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">End Date</label>
+          <input type="date" id="report-filter-end" class="w-full text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-800 focus:outline-none focus:border-brand" />
+        </div>
+        <div>
+          <label class="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">Delivery Partner</label>
+          <select id="report-filter-partner" class="w-full text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-800 focus:outline-none focus:border-brand">
+            <option value="all">All Delivery Partners</option>
+          </select>
+        </div>
+        <div class="flex items-end gap-2">
+          <button onclick="applyReportFilters()" class="flex-1 bg-brand hover:bg-brand-dark text-white text-xs font-semibold px-3 py-2 rounded-lg transition shadow-xs">
+            Apply Filter
+          </button>
+          <button onclick="resetReportFilters()" class="px-3 py-2 border border-slate-200 text-slate-600 hover:bg-slate-100 text-xs font-semibold rounded-lg transition">
+            Reset
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ERROR BANNER WITH RETRY (Hidden by default) -->
+    <div id="reports-error-banner" class="hidden p-3.5 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-between text-xs text-rose-800">
+      <div class="flex items-center space-x-2">
+        <i data-lucide="alert-circle" class="w-4 h-4 text-rose-600"></i>
+        <span id="reports-error-text">Failed to load reports data.</span>
+      </div>
+      <button onclick="loadReportsData()" class="px-2.5 py-1 bg-rose-600 hover:bg-rose-700 text-white font-semibold rounded-lg text-[11px] transition">
+        Retry
+      </button>
+    </div>
+
+    <!-- 2. COLLECTION SUMMARY CARDS (6 Key Metrics) -->
+    <div>
+      <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Collection Summary (Authoritative Ledger)</h4>
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Total Cash Collected</span>
+          <p class="text-lg font-extrabold text-slate-900 mt-1" id="report-total-collected">₹0.00</p>
+          <span class="text-[10px] text-slate-400" id="report-collections-count">0 collections</span>
+        </div>
+        <div class="p-3.5 rounded-xl bg-emerald-50 border border-emerald-200">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-800">Today's Collection</span>
+          <p class="text-lg font-extrabold text-emerald-900 mt-1" id="report-today-cash">₹0.00</p>
+          <span class="text-[10px] text-emerald-700">collected today</span>
+        </div>
+        <div class="p-3.5 rounded-xl bg-amber-50 border border-amber-200">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-amber-800">Prev. Unhanded Cash</span>
+          <p class="text-lg font-extrabold text-amber-900 mt-1" id="report-prev-unhanded">₹0.00</p>
+          <span class="text-[10px] text-amber-700">prior days in field</span>
+        </div>
+        <div class="p-3.5 rounded-xl bg-orange-50 border border-orange-200">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-orange-800">Pending Handover</span>
+          <p class="text-lg font-extrabold text-orange-900 mt-1" id="report-pending-handover">₹0.00</p>
+          <span class="text-[10px] text-orange-700">owed by partners</span>
+        </div>
+        <div class="p-3.5 rounded-xl bg-teal-50 border border-teal-200">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-teal-800">Confirmed / Reconciled</span>
+          <p class="text-lg font-extrabold text-teal-900 mt-1" id="report-confirmed-cash">₹0.00</p>
+          <span class="text-[10px] text-teal-700">received at hub</span>
+        </div>
+        <div class="p-3.5 rounded-xl bg-indigo-50 border border-indigo-200">
+          <span class="text-[10px] font-bold uppercase tracking-wider text-indigo-800">Orders Collected</span>
+          <p class="text-lg font-extrabold text-indigo-900 mt-1" id="report-orders-count">0</p>
+          <span class="text-[10px] text-indigo-700">distinct orders</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. DELIVERY PARTNER BREAKDOWN TABLE -->
+    <div class="pt-2">
+      <div class="flex items-center justify-between mb-2">
+        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500">Delivery Partner Breakdown</h4>
+        <span class="text-[11px] text-slate-400">* Legitimate delivery partners only</span>
+      </div>
+      <div class="overflow-x-auto rounded-xl border border-slate-200">
+        <table class="w-full text-left border-collapse text-xs">
+          <thead>
+            <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold uppercase tracking-wider text-[11px]">
+              <th class="py-3 px-4">Delivery Partner</th>
+              <th class="py-3 px-4">Orders Collected</th>
+              <th class="py-3 px-4">Cash Collected</th>
+              <th class="py-3 px-4">Cash Handed Over</th>
+              <th class="py-3 px-4">Pending Cash</th>
+              <th class="py-3 px-4">Last Handover</th>
+              <th class="py-3 px-4 text-center">Status</th>
+            </tr>
+          </thead>
+          <tbody id="report-partners-tbody" class="divide-y divide-slate-100">
+            <tr>
+              <td colspan="7" class="text-center py-6 text-slate-400">Loading delivery partner breakdown...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 4. CASH HANDOVER BREAKDOWN TABLE -->
+    <div class="pt-2">
+      <div class="flex items-center justify-between mb-2">
+        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-500">Cash Handover Batches</h4>
+        <div class="inline-flex rounded-lg bg-slate-100 p-0.5 text-xs">
+          <button onclick="filterReportHandoverStatus('all')" id="btn-rep-ho-all" class="px-2.5 py-1 font-semibold rounded-md bg-white text-slate-800 shadow-xs">All</button>
+          <button onclick="filterReportHandoverStatus('submitted')" id="btn-rep-ho-submitted" class="px-2.5 py-1 font-medium rounded-md text-slate-600 hover:text-slate-900">Pending</button>
+          <button onclick="filterReportHandoverStatus('confirmed')" id="btn-rep-ho-confirmed" class="px-2.5 py-1 font-medium rounded-md text-slate-600 hover:text-slate-900">Confirmed</button>
+        </div>
+      </div>
+      <div class="overflow-x-auto rounded-xl border border-slate-200">
+        <table class="w-full text-left border-collapse text-xs">
+          <thead>
+            <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold uppercase tracking-wider text-[11px]">
+              <th class="py-3 px-4">Handover #</th>
+              <th class="py-3 px-4">Delivery Partner</th>
+              <th class="py-3 px-4">Submitted Amount</th>
+              <th class="py-3 px-4">Received Amount</th>
+              <th class="py-3 px-4">Handover Date</th>
+              <th class="py-3 px-4">Confirmed By</th>
+              <th class="py-3 px-4">Status</th>
+            </tr>
+          </thead>
+          <tbody id="report-handovers-tbody" class="divide-y divide-slate-100">
+            <tr>
+              <td colspan="7" class="text-center py-6 text-slate-400">Loading cash handover batches...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+

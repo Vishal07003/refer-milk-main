@@ -50,6 +50,7 @@ from core.admin_views import (
     AdminReportsAPIView,
     AdminDeliverySlotsAPIView,
     AdminDeliverySlotDetailAPIView,
+    AdminRecycleBinAPIView,
 )
 
 urlpatterns = [
@@ -57,6 +58,7 @@ urlpatterns = [
     path('dairypanel/', AdminDashboardView.as_view(), name='admin-dashboard'),
     path('dashboard/', AdminDashboardView.as_view(), name='admin-dashboard-alias'),
     path('api/admin/stats/', AdminStatsAPIView.as_view(), name='admin-stats'),
+    path('api/admin/recycle-bin/', AdminRecycleBinAPIView.as_view(), name='admin-recycle-bin-api'),
     path('api/admin/reports/', AdminReportsAPIView.as_view(), name='admin-reports-api'),
     path('api/admin/cash-handovers/', AdminCashHandoversAPIView.as_view(), name='admin-cash-handovers-api'),
     path('api/admin/cash-handovers/<int:pk>/confirm/', AdminConfirmCashHandoverActionView.as_view(), name='admin-confirm-cash-handover-api'),

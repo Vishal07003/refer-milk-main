@@ -1,4 +1,5 @@
 from django.db import models
+from core.soft_delete import SoftDeleteModel
 
 
 class Category(models.Model):
@@ -17,7 +18,7 @@ class Category(models.Model):
         return self.name
 
 
-class Product(models.Model):
+class Product(SoftDeleteModel):
     UNIT_CHOICES = (
         ('kg', 'Kilogram'),
         ('litre', 'Litre'),

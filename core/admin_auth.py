@@ -63,6 +63,35 @@ def normalize_admin_phone(raw_phone: str) -> str:
     return digits
 
 
+def mask_phone(phone: str) -> str:
+    """
+    Masks a phone number for UI display (e.g., +91 ••••••3210 or ••••••3210).
+    """
+    cleaned = str(phone or "").strip()
+    if not cleaned:
+        return ""
+    digits = normalize_admin_phone(cleaned)
+    if len(digits) >= 4:
+        return f"+91 ••••••{digits[-4:]}"
+    return "••••"
+
+
+def mask_email(email: str) -> str:
+    """
+    Masks an email address for UI display (e.g., a•••••n@example.com).
+    """
+    cleaned = str(email or "").strip()
+    if not cleaned or "@" not in cleaned:
+        return ""
+    parts = cleaned.split("@", 1)
+    user_part, domain_part = parts[0], parts[1]
+    if len(user_part) <= 2:
+        masked_user = user_part[0] + "•••"
+    else:
+        masked_user = user_part[0] + "•" * (len(user_part) - 2) + user_part[-1]
+    return f"{masked_user}@{domain_part}"
+
+
 def get_safe_redirect_url(target_url, allowed_hosts=None, fallback="/dairypanel/"):
     """
     Validates a redirect target URL to prevent open redirect vulnerabilities.

@@ -181,3 +181,66 @@ class Payment(models.Model):
 
     def __str__(self):
         return f"{self.user.mobile_number} - ₹{self.amount} ({self.payment_status})"
+
+
+class CustomerVacation(models.Model):
+    """
+    Vacation Mode record for a customer account.
+    Covers all eligible subscriptions for the customer over a defined start and end date range.
+    """
+    STATUS_CHOICES = (
+        ("active", "Active Vacation"),
+        ("cancelled", "Cancelled Early"),
+        ("completed", "Completed & Resumed"),
+    )
+
+    user = models.ForeignKey(
+        User, on_delete=models.CASCADE, related_name="vacations",
+        help_text="Customer who activated vacation"
+    )
+    start_date = models.DateField(help_text="First day of vacation pause (inclusive)")
+    end_date = models.DateField(help_text="Last day of vacation pause (inclusive)")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="active", db_index=True)
+    reason = models.CharField(max_length=255, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    resumed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Customer Vacation"
+        verbose_name_plural = "Customer Vacations"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Vacation #{self.id} - {self.user.mobile_number} ({self.start_date} to {self.end_date}) [{self.status}]"
+
+    @property
+    def is_currently_active(self):
+        today = timezone.localdate()
+        return self.status == "active" and self.start_date <= today <= self.end_date
+
+
+class VacationAffectedSubscription(models.Model):
+    """
+    Audit and tracking record for each individual subscription paused by a CustomerVacation.
+    Ensures that ONLY subscriptions changed by Vacation Mode are resumed upon completion/cancellation,
+    preserving manually paused or un-paused subscriptions.
+    """
+    vacation = models.ForeignKey(
+        CustomerVacation, on_delete=models.CASCADE, related_name="affected_subscriptions"
+    )
+    subscription = models.ForeignKey(
+        Subscription, on_delete=models.CASCADE, related_name="vacation_records"
+    )
+    previous_status = models.CharField(max_length=20, default="active")
+    paused_at = models.DateTimeField(auto_now_add=True)
+    resumed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Vacation Affected Subscription"
+        verbose_name_plural = "Vacation Affected Subscriptions"
+        unique_together = ("vacation", "subscription")
+
+    def __str__(self):
+        return f"Vacation #{self.vacation_id} -> Sub #{self.subscription_id} (prev: {self.previous_status})"

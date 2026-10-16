@@ -1,5 +1,26 @@
 <!-- SECTION 1: DASHBOARD & KPIS -->
       <div id="content-dashboard" class="space-y-6">
+        <!-- Recovery Setup Reminder Banner -->
+        <div id="dash-setup-reminder-banner" class="hidden p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border border-amber-200/80 text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+          <div class="flex items-center space-x-3 min-w-0">
+            <div class="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+              <i data-lucide="shield-alert" class="w-5 h-5"></i>
+            </div>
+            <div class="min-w-0">
+              <p class="text-xs font-bold text-slate-900 truncate">Action Recommended: Complete Administrator Recovery Setup</p>
+              <p class="text-[11px] text-slate-600 truncate">Verify your administrator mobile number and emergency recovery email so your account can be recovered if you forget your password.</p>
+            </div>
+          </div>
+          <div class="flex items-center space-x-2 shrink-0">
+            <button onclick="switchTab('settings')" class="px-3.5 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition shadow-xs">
+              Configure Now
+            </button>
+            <button onclick="document.getElementById('dash-setup-reminder-banner').classList.add('hidden')" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition">
+              <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+
         <!-- Primary KPI Cards Grid (Row 1) -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <!-- Total Customers -->

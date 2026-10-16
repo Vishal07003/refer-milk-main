@@ -19,5 +19,12 @@
           <span class="w-1.5 h-1.5 rounded-full bg-emerald-600 mr-1 animate-pulse"></span>
           Live DB Connected
         </span>
+        <form method="POST" action="/dairypanel/logout/" class="inline m-0 p-0">
+          {% csrf_token %}
+          <button type="submit" class="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg border border-rose-200 bg-rose-50/50 hover:bg-rose-50 text-rose-700 text-xs font-semibold transition shadow-xs cursor-pointer" title="Log out of Admin Panel">
+            <i data-lucide="log-out" class="w-3.5 h-3.5 text-rose-600"></i>
+            <span>Logout</span>
+          </button>
+        </form>
       </div>
     </header>

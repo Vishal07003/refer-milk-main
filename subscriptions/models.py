@@ -5,6 +5,7 @@ from django.db import models
 from django.utils import timezone
 
 from accounts.models import Address, User
+from core.soft_delete import SoftDeleteModel
 
 
 class ReferralDiscountTier(models.Model):
@@ -47,7 +48,7 @@ class SubscriptionPlan(models.Model):
         return f"{self.name} - {self.product.name} ({self.quantity} {self.unit}, ₹{self.price_per_unit}/{self.unit})"
 
 
-class Subscription(models.Model):
+class Subscription(SoftDeleteModel):
     STATUS_CHOICES = (
         ('pending', 'Pending Approval'),
         ('active', 'Active'),
@@ -88,6 +89,24 @@ class Subscription(models.Model):
     def __str__(self):
         plan_prefix = f"[{self.plan.name}] " if self.plan else ""
         return f"{plan_prefix}{self.user.mobile_number} - {self.product.name} x{self.quantity}/day ({self.status})"
+
+    def delete(self, using=None, keep_parents=False, hard=False, deleted_by=None):
+        if hard:
+            return super().delete(using=using, keep_parents=keep_parents, hard=True)
+        # Soft delete: cancel subscription and clean future pending drops
+        self.is_deleted = True
+        self.status = "cancelled"
+        if not self.cancelled_at:
+            self.cancelled_at = timezone.now()
+        self.deleted_at = timezone.now()
+        if deleted_by:
+            self.deleted_by = deleted_by
+        self.save(update_fields=["is_deleted", "status", "cancelled_at", "deleted_at", "deleted_by", "updated_at"])
+
+        # Stop future pending daily deliveries safely (preserve delivered/failed historical drops!)
+        today = timezone.localdate()
+        self.daily_deliveries.filter(delivery_date__gte=today, status="pending").delete()
+        return 1, {self._meta.label: 1}
 
     def save(self, *args, **kwargs):
         self.final_price_per_unit = Decimal(str(self.price_per_unit)) - Decimal(str(self.discount_per_unit or 0))

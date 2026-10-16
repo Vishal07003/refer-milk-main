@@ -51,12 +51,17 @@ from core.admin_views import (
     AdminDeliverySlotsAPIView,
     AdminDeliverySlotDetailAPIView,
     AdminRecycleBinAPIView,
+    AdminVacationsAPIView,
     AdminLoginView,
     AdminLogoutView,
     AdminForgotPasswordView,
     AdminResetPasswordConfirmView,
     AdminVerifyOtpView,
     AdminResetPasswordWithOtpView,
+    AdminAccountSettingsAPIView,
+    AdminInitiateContactChangeAPIView,
+    AdminVerifyContactChangeAPIView,
+    AdminChangePasswordAPIView,
 )
 
 urlpatterns = [
@@ -71,6 +76,7 @@ urlpatterns = [
     path('dashboard/', AdminDashboardView.as_view(), name='admin-dashboard-alias'),
     path('api/admin/logout/', AdminLogoutView.as_view(), name='api-admin-logout'),
     path('api/admin/stats/', AdminStatsAPIView.as_view(), name='admin-stats'),
+    path('api/admin/vacations/', AdminVacationsAPIView.as_view(), name='admin-vacations-api'),
     path('api/admin/recycle-bin/', AdminRecycleBinAPIView.as_view(), name='admin-recycle-bin-api'),
     path('api/admin/reports/', AdminReportsAPIView.as_view(), name='admin-reports-api'),
     path('api/admin/cash-handovers/', AdminCashHandoversAPIView.as_view(), name='admin-cash-handovers-api'),
@@ -98,6 +104,10 @@ urlpatterns = [
     path('api/admin/settings/', AdminSettingsAPIView.as_view(), name='admin-settings-api'),
     path('api/admin/delivery-slots/', AdminDeliverySlotsAPIView.as_view(), name='admin-delivery-slots-api'),
     path('api/admin/delivery-slots/<int:pk>/', AdminDeliverySlotDetailAPIView.as_view(), name='admin-delivery-slot-detail-api'),
+    path('api/admin/account/settings/', AdminAccountSettingsAPIView.as_view(), name='admin-account-settings-api'),
+    path('api/admin/account/initiate-contact-change/', AdminInitiateContactChangeAPIView.as_view(), name='admin-initiate-contact-change-api'),
+    path('api/admin/account/verify-contact-change/', AdminVerifyContactChangeAPIView.as_view(), name='admin-verify-contact-change-api'),
+    path('api/admin/account/change-password/', AdminChangePasswordAPIView.as_view(), name='admin-change-password-api'),
 
     path('api/v1/auth/', include('accounts.urls')),
     path('api/v1/wallet/', include('accounts.wallet_urls')),

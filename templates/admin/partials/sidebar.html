@@ -84,6 +84,14 @@
           <span>Notifications</span>
         </button>
 
+        <button onclick="switchTab('recycle-bin')" id="nav-btn-recycle-bin" class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition">
+          <div class="flex items-center space-x-3">
+            <i data-lucide="trash-2" class="w-4 h-4 text-rose-400"></i>
+            <span>Recycle Bin</span>
+          </div>
+          <span id="recycle-bin-badge" class="hidden px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30">0</span>
+        </button>
+
         <button onclick="switchTab('settings')" id="nav-btn-settings" class="w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition">
           <i data-lucide="settings" class="w-4 h-4"></i>
           <span>Settings & Audit</span>

@@ -234,7 +234,7 @@ class UpdateOrderDeliveryStatusView(APIView):
         if new_status == "out_for_delivery":
             send_notification_to_user(
                 user=order.user,
-                title="Out for Delivery 🚚",
+                title="Out for Delivery",
                 body=f"Your order #{order.id} is out for delivery.",
                 data={"type": "out_for_delivery", "order_id": str(order.id)},
                 notification_type="order",
@@ -242,7 +242,7 @@ class UpdateOrderDeliveryStatusView(APIView):
         elif new_status == "delivered":
             send_notification_to_user(
                 user=order.user,
-                title="Order Delivered 🥛",
+                title="Order Delivered",
                 body=f"Your order #{order.id} has been delivered successfully.",
                 data={"type": "order_delivered", "order_id": str(order.id)},
                 notification_type="order",
@@ -393,7 +393,7 @@ class UpdateDailyDeliveryStatusView(APIView):
             from notifications.services import send_notification_to_user
             send_notification_to_user(
                 user=delivery.subscription.user,
-                title="Out for Delivery 🚚",
+                title="Out for Delivery",
                 body=f"Your {delivery.subscription.product.name} milk delivery is on the way.",
                 data={"type": "out_for_delivery", "subscription_id": str(delivery.subscription.id)},
                 notification_type="subscription",
@@ -402,7 +402,7 @@ class UpdateDailyDeliveryStatusView(APIView):
             from notifications.services import send_notification_to_user
             send_notification_to_user(
                 user=delivery.subscription.user,
-                title="Delivery Completed 🥛",
+                title="Delivery Completed",
                 body=f"Your {delivery.subscription.product.name} has been delivered for today.",
                 data={"type": "order_delivered", "subscription_id": str(delivery.subscription.id)},
                 notification_type="subscription",
@@ -872,7 +872,7 @@ class CollectPaymentView(APIView):
         try:
             send_notification_to_user(
                 user=locked_order.user,
-                title="Payment Collected 🥛",
+                title="Payment Collected",
                 body=f"Payment of ₹{locked_order.final_amount} for order #{locked_order.id} has been collected.",
                 data={
                     "type": "offline_payment_collected",

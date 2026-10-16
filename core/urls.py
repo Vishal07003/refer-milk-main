@@ -51,12 +51,17 @@ from core.admin_views import (
     AdminDeliverySlotsAPIView,
     AdminDeliverySlotDetailAPIView,
     AdminRecycleBinAPIView,
+    AdminLoginView,
+    AdminLogoutView,
 )
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('dairypanel/', AdminDashboardView.as_view(), name='admin-dashboard'),
+    path('dairypanel/login/', AdminLoginView.as_view(), name='admin-login'),
+    path('dairypanel/logout/', AdminLogoutView.as_view(), name='admin-logout'),
     path('dashboard/', AdminDashboardView.as_view(), name='admin-dashboard-alias'),
+    path('api/admin/logout/', AdminLogoutView.as_view(), name='api-admin-logout'),
     path('api/admin/stats/', AdminStatsAPIView.as_view(), name='admin-stats'),
     path('api/admin/recycle-bin/', AdminRecycleBinAPIView.as_view(), name='admin-recycle-bin-api'),
     path('api/admin/reports/', AdminReportsAPIView.as_view(), name='admin-reports-api'),

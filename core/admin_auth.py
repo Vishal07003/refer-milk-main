@@ -26,6 +26,17 @@ def is_admin_user(user):
     """
     if not user or not user.is_authenticated:
         return False
+    return is_eligible_admin_user(user)
+
+
+def is_eligible_admin_user(user):
+    """
+    Returns True only if the user is active, not soft-deleted,
+    and has admin/staff privileges (regardless of current authentication state).
+    Used for verifying eligibility for password resets.
+    """
+    if not user:
+        return False
     if not getattr(user, "is_active", False):
         return False
     if getattr(user, "is_deleted", False):
@@ -35,6 +46,21 @@ def is_admin_user(user):
         or getattr(user, "is_superuser", False)
         or getattr(user, "role", None) == "admin"
     )
+
+
+def normalize_admin_phone(raw_phone: str) -> str:
+    """
+    Normalizes a user-supplied mobile phone number to clean digits.
+    Strips non-digits, leading zeros, and optional leading country code (91)
+    to match the standard 10-digit mobile_number field format stored in database.
+    """
+    import re
+    digits = re.sub(r"\D", "", str(raw_phone or "").strip())
+    if len(digits) > 10 and digits.startswith("91"):
+        digits = digits[2:]
+    elif len(digits) > 10 and digits.startswith("0"):
+        digits = digits.lstrip("0")
+    return digits
 
 
 def get_safe_redirect_url(target_url, allowed_hosts=None, fallback="/dairypanel/"):

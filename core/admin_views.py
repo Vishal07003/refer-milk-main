@@ -15,7 +15,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from accounts.models import (
     User, OTP, DeliveryBoyProfile, Address, Referral,
-    Notification, SystemSetting, AdminAuditLog
+    Notification, SystemSetting, AdminAuditLog, AdminPasswordResetSession
 )
 from products.models import Product, Category
 from orders.models import Order, OrderItem, OfflinePaymentCollection, DeliverySlot
@@ -23,6 +23,8 @@ from subscriptions.models import Subscription, SubscriptionPlan
 from delivery.models import DailyDelivery, CashHandover
 from core.admin_auth import (
     is_admin_user,
+    is_eligible_admin_user,
+    normalize_admin_phone,
     get_safe_redirect_url,
     admin_dashboard_required,
     admin_api_required,
@@ -250,6 +252,625 @@ class AdminLogoutView(View):
 
     def get(self, request):
         return self.post(request)
+
+
+class AdminForgotPasswordView(View):
+    """
+    Handles administrator password reset requests for both recovery modes:
+    1. 'mobile' (Mobile Number + SMS OTP via 2Factor)
+    2. 'email' (Email address + secure Django reset link)
+
+    - Rate limits repeated reset requests per client IP to mitigate abuse.
+    - Always responds with a generic confirmation message regardless of whether
+      the submitted email/mobile exists or belongs to an eligible admin account,
+      preventing account enumeration.
+    - Only dispatches recovery messages for active, non-deleted staff/admin accounts.
+    - Never leaks internal secrets or codes in public responses or logs.
+    """
+    def get(self, request):
+        if is_admin_user(getattr(request, "user", None)):
+            return redirect("/dairypanel/")
+        active_tab = request.GET.get("tab", "mobile")
+        return render(request, "admin/forgot_password.html", {"active_tab": active_tab})
+
+    def post(self, request):
+        import secrets
+        from datetime import timedelta
+        from django.core.cache import cache
+        from django.contrib.auth.tokens import default_token_generator
+        from django.utils.http import urlsafe_base64_encode
+        from django.utils.encoding import force_bytes
+        from django.core.mail import send_mail
+        from django.db import transaction
+        from accounts.sms_service import send_sms_otp_via_2factor
+
+        # Rate-limiting: limit recovery requests per client IP (max 5 per 15 minutes)
+        ip = None
+        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
+        if x_forwarded_for:
+            ip = x_forwarded_for.split(",")[0].strip()
+        else:
+            ip = request.META.get("REMOTE_ADDR") or "127.0.0.1"
+
+        cache_key = f"admin_pw_reset_limit_{ip}"
+        attempts = cache.get(cache_key, 0)
+        if attempts >= 5:
+            return render(
+                request,
+                "admin/forgot_password.html",
+                {
+                    "error_message": "Too many password recovery attempts. Please wait a few minutes before trying again.",
+                    "active_tab": request.POST.get("recovery_mode", "mobile"),
+                },
+                status=429,
+            )
+        cache.set(cache_key, attempts + 1, 900)  # 15 minutes
+
+        recovery_mode = request.POST.get("recovery_mode", "").strip().lower()
+        if not recovery_mode:
+            if "email" in request.POST and "mobile_number" not in request.POST:
+                recovery_mode = "email"
+            else:
+                recovery_mode = "mobile"
+
+        # =====================================================================
+        # MODE 1: MOBILE NUMBER + SMS OTP RECOVERY
+        # =====================================================================
+        if recovery_mode == "mobile":
+            raw_mobile = request.POST.get("mobile_number", "").strip()
+            norm_mobile = normalize_admin_phone(raw_mobile)
+
+            if not norm_mobile or len(norm_mobile) < 10:
+                return render(
+                    request,
+                    "admin/forgot_password.html",
+                    {
+                        "error_message": "Please enter a valid 10-digit mobile number.",
+                        "active_tab": "mobile",
+                        "submitted_mobile": raw_mobile,
+                    },
+                    status=400,
+                )
+
+            # Check resend cooldown per mobile number (60 seconds)
+            cooldown_key = f"admin_otp_cooldown_{norm_mobile}"
+            if cache.get(cooldown_key):
+                return render(
+                    request,
+                    "admin/forgot_password.html",
+                    {
+                        "error_message": "A security code was recently requested. Please wait 60 seconds before requesting another code.",
+                        "active_tab": "mobile",
+                        "submitted_mobile": raw_mobile,
+                    },
+                    status=429,
+                )
+
+            # Resolve eligible admin user matching mobile number
+            target_user = User.objects.filter(mobile_number=norm_mobile).first()
+
+            if target_user and is_eligible_admin_user(target_user):
+                # Cryptographically secure 6-digit OTP
+                otp_code = f"{secrets.randbelow(900000) + 100000}"
+                otp_hash_val = AdminPasswordResetSession.hash_otp(otp_code)
+                now = timezone.now()
+                expires_at = now + timedelta(minutes=5)
+
+                with transaction.atomic():
+                    # Invalidate prior unverified reset sessions for this user
+                    AdminPasswordResetSession.objects.filter(
+                        user=target_user, is_verified=False
+                    ).delete()
+
+                    session_obj = AdminPasswordResetSession.objects.create(
+                        user=target_user,
+                        mobile_number=norm_mobile,
+                        otp_hash=otp_hash_val,
+                        expires_at=expires_at,
+                    )
+
+                # Set 60-second cooldown
+                cache.set(cooldown_key, True, 60)
+
+                # Send OTP via existing 2Factor SMS gateway
+                success, msg, _ = send_sms_otp_via_2factor(norm_mobile, otp_code)
+                if not success:
+                    log_admin_action(
+                        target_user,
+                        "auth",
+                        "password_reset_otp_failed_sms",
+                        target_id=target_user.id,
+                        details="2Factor SMS dispatch failed",
+                        request=request,
+                    )
+                    return render(
+                        request,
+                        "admin/forgot_password.html",
+                        {
+                            "error_message": "Unable to deliver SMS security code. Please verify your SMS gateway service or try Email recovery.",
+                            "active_tab": "mobile",
+                            "submitted_mobile": raw_mobile,
+                        },
+                        status=503,
+                    )
+
+                log_admin_action(
+                    target_user,
+                    "auth",
+                    "password_reset_otp_sent",
+                    target_id=target_user.id,
+                    details=f"Admin password recovery OTP dispatched via SMS to {norm_mobile}",
+                    request=request,
+                )
+
+                # Mask phone number for display (e.g. ••••••3210)
+                masked_mobile = f"••••••{norm_mobile[-4:]}"
+                return render(
+                    request,
+                    "admin/verify_otp.html",
+                    {
+                        "session_id": session_obj.id,
+                        "masked_mobile": masked_mobile,
+                    },
+                )
+            else:
+                if target_user:
+                    log_admin_action(
+                        None,
+                        "auth",
+                        "password_reset_skipped_non_admin",
+                        target_id=target_user.id,
+                        details=f"Password reset requested for ineligible account role: {getattr(target_user, 'role', 'unknown')}",
+                        request=request,
+                    )
+
+                # Account enumeration prevention: return generic confirmation message
+                generic_mobile_message = (
+                    "If an eligible administrator account is registered with this mobile number, "
+                    "a 6-digit security code has been dispatched via SMS. Please check your phone."
+                )
+                return render(
+                    request,
+                    "admin/forgot_password.html",
+                    {
+                        "success_message": generic_mobile_message,
+                        "active_tab": "mobile",
+                    },
+                )
+
+        # =====================================================================
+        # MODE 2: EMAIL RESET LINK RECOVERY
+        # =====================================================================
+        else:
+            email = request.POST.get("email", "").strip()
+            if not email:
+                return render(
+                    request,
+                    "admin/forgot_password.html",
+                    {
+                        "error_message": "Please enter a valid administrator email address.",
+                        "active_tab": "email",
+                    },
+                    status=400,
+                )
+
+            generic_email_message = (
+                "If an eligible administrator account is registered with this email address, "
+                "a secure password reset link has been dispatched. Please check your inbox and spam folders."
+            )
+
+            # Look up eligible admin users matching email
+            matched_users = User.objects.filter(email__iexact=email)
+
+            for user in matched_users:
+                if not is_eligible_admin_user(user):
+                    log_admin_action(
+                        None,
+                        "auth",
+                        "password_reset_skipped_non_admin",
+                        target_id=user.id,
+                        details=f"Password reset requested for ineligible account role: {getattr(user, 'role', 'unknown')}",
+                        request=request,
+                    )
+                    continue
+
+                # Generate URL-safe base64 UID and Django password reset token
+                uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
+                token = default_token_generator.make_token(user)
+
+                protocol = "https" if request.is_secure() else "http"
+                host = request.get_host()
+                reset_url = f"{protocol}://{host}/dairypanel/reset-password/{uidb64}/{token}/"
+
+                subject = "Refer Milk DudhDairy — Admin Password Reset Request"
+                message_body = (
+                    f"Hello {user.first_name or user.username},\n\n"
+                    "A password reset request was received for your Refer Milk DudhDairy administrator account.\n\n"
+                    f"To set a new password, click the link below (or paste it into your browser):\n"
+                    f"{reset_url}\n\n"
+                    "This reset link is single-use and will expire automatically.\n"
+                    "If you did not request this password reset, please ignore this email or contact security immediately.\n\n"
+                    "— Refer Milk DudhDairy Central Hub Security Team"
+                )
+
+                from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "webmaster@localhost")
+                try:
+                    send_mail(
+                        subject=subject,
+                        message=message_body,
+                        from_email=from_email,
+                        recipient_list=[user.email],
+                        fail_silently=False,
+                    )
+                    log_admin_action(
+                        user,
+                        "auth",
+                        "password_reset_sent",
+                        target_id=user.id,
+                        details=f"Admin password reset email dispatched to {user.email}",
+                        request=request,
+                    )
+                except Exception as e:
+                    log_admin_action(
+                        user,
+                        "auth",
+                        "password_reset_email_failed",
+                        target_id=user.id,
+                        details=f"Failed to dispatch password reset email: {type(e).__name__}",
+                        request=request,
+                    )
+
+            # Always return generic message to prevent account enumeration
+            return render(
+                request,
+                "admin/forgot_password.html",
+                {
+                    "success_message": generic_email_message,
+                    "active_tab": "email",
+                },
+            )
+
+
+class AdminVerifyOtpView(View):
+    """
+    Verifies the 6-digit SMS OTP against an active AdminPasswordResetSession.
+    - Limits failed attempts to max 5.
+    - Checks 5-minute expiry.
+    - Generates a cryptographically random, temporary reset token (valid 15 minutes).
+    - Invalidates the OTP code once verified to prevent reuse.
+    """
+    def post(self, request):
+        import secrets
+        from datetime import timedelta
+        from django.db import transaction
+
+        session_id = request.POST.get("session_id", "").strip()
+        input_otp = request.POST.get("otp", "").strip()
+
+        session_obj = AdminPasswordResetSession.objects.filter(
+            id=session_id, is_consumed=False
+        ).select_related("user").first()
+
+        if not session_obj:
+            return render(
+                request,
+                "admin/verify_otp.html",
+                {
+                    "session_id": session_id,
+                    "error_message": "Invalid or expired recovery session. Please request a new code.",
+                },
+                status=400,
+            )
+
+        masked_mobile = f"••••••{session_obj.mobile_number[-4:]}"
+
+        # Check account eligibility
+        if not is_eligible_admin_user(session_obj.user):
+            return render(
+                request,
+                "admin/verify_otp.html",
+                {
+                    "session_id": session_id,
+                    "masked_mobile": masked_mobile,
+                    "error_message": "This account is not eligible for administrator recovery.",
+                },
+                status=403,
+            )
+
+        # Check expiry
+        if session_obj.is_expired:
+            return render(
+                request,
+                "admin/verify_otp.html",
+                {
+                    "session_id": session_id,
+                    "masked_mobile": masked_mobile,
+                    "error_message": "The verification code has expired (5 minute limit). Please request a new code.",
+                },
+                status=400,
+            )
+
+        # Check attempt count
+        if session_obj.attempts_count >= session_obj.max_attempts:
+            return render(
+                request,
+                "admin/verify_otp.html",
+                {
+                    "session_id": session_id,
+                    "masked_mobile": masked_mobile,
+                    "error_message": "Maximum verification attempts exceeded. For security, please request a new code.",
+                },
+                status=429,
+            )
+
+        # Verify OTP
+        if not session_obj.check_otp(input_otp):
+            session_obj.attempts_count += 1
+            session_obj.save(update_fields=["attempts_count"])
+            remaining = session_obj.max_attempts - session_obj.attempts_count
+            return render(
+                request,
+                "admin/verify_otp.html",
+                {
+                    "session_id": session_id,
+                    "masked_mobile": masked_mobile,
+                    "error_message": f"Incorrect verification code. {remaining} attempt(s) remaining.",
+                },
+                status=400,
+            )
+
+        # Mark verified and generate single-use reset authorization token
+        with transaction.atomic():
+            reset_token = secrets.token_urlsafe(32)
+            now = timezone.now()
+            session_obj.is_verified = True
+            session_obj.reset_token = reset_token
+            session_obj.reset_token_expires_at = now + timedelta(minutes=15)
+            session_obj.save(update_fields=["is_verified", "reset_token", "reset_token_expires_at"])
+
+        log_admin_action(
+            session_obj.user,
+            "auth",
+            "password_reset_otp_verified",
+            target_id=session_obj.user.id,
+            details=f"Admin {session_obj.user.username} successfully verified SMS OTP",
+            request=request,
+        )
+
+        return redirect(f"/dairypanel/reset-password-otp/{reset_token}/")
+
+
+class AdminResetPasswordWithOtpView(View):
+    """
+    Renders and processes the password reset form for OTP-verified sessions.
+    - Validates the temporary reset authorization token.
+    - Ensures single-use atomic consumption (cannot be reused).
+    - Checks 15-minute token expiry.
+    - Applies Django password validators.
+    - Invalidates all pending recovery sessions for this user upon success.
+    - Does NOT automatically log in the user.
+    """
+    def get(self, request, token):
+        session_obj = AdminPasswordResetSession.objects.filter(
+            reset_token=token,
+            is_verified=True,
+            is_consumed=False,
+        ).select_related("user").first()
+
+        if (
+            not session_obj
+            or session_obj.is_reset_token_expired
+            or not is_eligible_admin_user(session_obj.user)
+        ):
+            return render(
+                request,
+                "admin/reset_password.html",
+                {"validlink": False},
+                status=400,
+            )
+
+        return render(
+            request,
+            "admin/reset_password.html",
+            {
+                "validlink": True,
+                "target_user_display": session_obj.user.username,
+            },
+        )
+
+    def post(self, request, token):
+        from django.contrib.auth.password_validation import validate_password
+        from django.core.exceptions import ValidationError
+        from django.db import transaction
+
+        session_obj = AdminPasswordResetSession.objects.filter(
+            reset_token=token,
+            is_verified=True,
+            is_consumed=False,
+        ).select_related("user").first()
+
+        if (
+            not session_obj
+            or session_obj.is_reset_token_expired
+            or not is_eligible_admin_user(session_obj.user)
+        ):
+            return render(
+                request,
+                "admin/reset_password.html",
+                {"validlink": False},
+                status=400,
+            )
+
+        new_password = request.POST.get("new_password", "")
+        confirm_password = request.POST.get("confirm_password", "")
+
+        errors = []
+        if not new_password:
+            errors.append("Please enter a new password.")
+        elif new_password != confirm_password:
+            errors.append("Passwords do not match. Please verify your entries.")
+        else:
+            try:
+                validate_password(new_password, user=session_obj.user)
+            except ValidationError as ve:
+                errors.extend(ve.messages)
+
+        if errors:
+            return render(
+                request,
+                "admin/reset_password.html",
+                {
+                    "validlink": True,
+                    "target_user_display": session_obj.user.username,
+                    "error_messages": errors,
+                },
+                status=400,
+            )
+
+        # Atomic password update and session consumption
+        with transaction.atomic():
+            user = session_obj.user
+            user.set_password(new_password)
+            user.save(update_fields=["password"])
+
+            # Invalidate all recovery sessions for this user
+            AdminPasswordResetSession.objects.filter(user=user).update(is_consumed=True)
+
+        log_admin_action(
+            user,
+            "auth",
+            "password_reset_success_otp",
+            target_id=user.id,
+            details=f"Password successfully reset via OTP for admin {user.username}",
+            request=request,
+        )
+
+        return render(
+            request,
+            "admin/reset_password.html",
+            {
+                "reset_successful": True,
+                "validlink": True,
+            },
+        )
+
+
+class AdminResetPasswordConfirmView(View):
+    """
+    Validates the user UID and reset token, and allows setting a new administrator password via Email link.
+    - Checks user eligibility (must be staff/superuser/admin, active, not soft-deleted).
+    - Checks token validity via default_token_generator.check_token.
+    - Validates new password matching and Django password validation rules.
+    - Invalidates the token upon success (Django tokens incorporate password hash in their token generator).
+    - Requires subsequent login with the new password; does NOT log in automatically.
+    """
+    def get_user(self, uidb64):
+        from django.utils.http import urlsafe_base64_decode
+        from django.utils.encoding import force_str
+        try:
+            uid = force_str(urlsafe_base64_decode(uidb64))
+            user = User.all_objects.get(pk=uid)
+            return user
+        except Exception:
+            return None
+
+    def get(self, request, uidb64, token):
+        user = self.get_user(uidb64)
+        from django.contrib.auth.tokens import default_token_generator
+
+        if (
+            not user
+            or not is_eligible_admin_user(user)
+            or not default_token_generator.check_token(user, token)
+        ):
+            return render(
+                request,
+                "admin/reset_password.html",
+                {
+                    "validlink": False,
+                },
+                status=400,
+            )
+
+        return render(
+            request,
+            "admin/reset_password.html",
+            {
+                "validlink": True,
+                "target_user_display": user.username,
+            },
+        )
+
+    def post(self, request, uidb64, token):
+        from django.contrib.auth.tokens import default_token_generator
+        from django.contrib.auth.password_validation import validate_password
+        from django.core.exceptions import ValidationError
+        from django.db import transaction
+
+        user = self.get_user(uidb64)
+        if (
+            not user
+            or not is_eligible_admin_user(user)
+            or not default_token_generator.check_token(user, token)
+        ):
+            return render(
+                request,
+                "admin/reset_password.html",
+                {
+                    "validlink": False,
+                },
+                status=400,
+            )
+
+        new_password = request.POST.get("new_password", "")
+        confirm_password = request.POST.get("confirm_password", "")
+
+        errors = []
+        if not new_password:
+            errors.append("Please enter a new password.")
+        elif new_password != confirm_password:
+            errors.append("Passwords do not match. Please verify your entries.")
+        else:
+            try:
+                validate_password(new_password, user=user)
+            except ValidationError as ve:
+                errors.extend(ve.messages)
+
+        if errors:
+            return render(
+                request,
+                "admin/reset_password.html",
+                {
+                    "validlink": True,
+                    "target_user_display": user.username,
+                    "error_messages": errors,
+                },
+                status=400,
+            )
+
+        # Set new password, updating password hash in database and invalidating pending OTP sessions
+        with transaction.atomic():
+            user.set_password(new_password)
+            user.save(update_fields=["password"])
+            AdminPasswordResetSession.objects.filter(user=user).update(is_consumed=True)
+
+        log_admin_action(
+            user,
+            "auth",
+            "password_reset_success",
+            target_id=user.id,
+            details=f"Password successfully reset for admin {user.username}",
+            request=request,
+        )
+
+        return render(
+            request,
+            "admin/reset_password.html",
+            {
+                "reset_successful": True,
+                "validlink": True,
+            },
+        )
 
 
 @method_decorator([csrf_exempt, admin_api_required], name="dispatch")
@@ -710,7 +1331,7 @@ class AdminCustomersAPIView(View):
         except Exception:
             body = {}
 
-        user_id = body.get("user_id")
+        user_id = body.get("user_id") or body.get("id")
         action = body.get("action")
 
         if not user_id:

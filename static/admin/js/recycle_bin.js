@@ -311,8 +311,19 @@ function closeSoftDeleteModal() {
 }
 
 async function executeSoftDelete() {
-  const type = document.getElementById('soft-delete-type').value;
-  const id = document.getElementById('soft-delete-id').value;
+  const type = (document.getElementById('soft-delete-type')?.value || '').trim();
+  const idVal = (document.getElementById('soft-delete-id')?.value || '').trim();
+
+  if (!type || !idVal) {
+    showToast('User ID is required to perform deletion.', true);
+    return;
+  }
+
+  const id = parseInt(idVal, 10);
+  if (isNaN(id) || id <= 0) {
+    showToast('Invalid record ID for deletion.', true);
+    return;
+  }
 
   const btn = document.getElementById('soft-delete-confirm-btn');
   if (btn) btn.disabled = true;
@@ -322,16 +333,16 @@ async function executeSoftDelete() {
     let payload = {};
     if (type === 'customer') {
       url = '/api/admin/customers/';
-      payload = { action: 'delete', id };
+      payload = { action: 'delete', id: id, user_id: id };
     } else if (type === 'delivery_boy') {
       url = '/api/admin/delivery-boys/';
-      payload = { action: 'delete', id };
+      payload = { action: 'delete', id: id, user_id: id };
     } else if (type === 'product') {
       url = '/api/admin/products/';
-      payload = { id };
+      payload = { id: id };
     } else if (type === 'subscription') {
       url = '/api/admin/subscriptions/';
-      payload = { action: 'delete', id };
+      payload = { action: 'delete', id: id };
     }
 
     const res = await fetch(url, {

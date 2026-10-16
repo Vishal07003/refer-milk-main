@@ -1,3 +1,4 @@
+from datetime import timedelta
 import secrets
 import string
 
@@ -9,6 +10,7 @@ from core.soft_delete import (
     SoftDeleteUserManager,
     SoftDeleteQuerySet,
     RecycleBinManager,
+    get_retention_days,
 )
 
 
@@ -118,6 +120,38 @@ class User(AbstractUser):
         filled = sum(1 for value in fields.values() if value)
         total = len(fields)
         return round((filled / total) * 100)
+
+    @property
+    def scheduled_permanent_deletion_date(self):
+        """
+        Calculates the timestamp when retention expires based on current settings.
+        """
+        if not self.deleted_at:
+            return None
+        days = get_retention_days()
+        return self.deleted_at + timedelta(days=days)
+
+    @property
+    def remaining_retention_days(self):
+        """
+        Calculates whole days remaining until permanent deletion eligibility.
+        """
+        scheduled = self.scheduled_permanent_deletion_date
+        if not scheduled:
+            return None
+        now = timezone.now()
+        diff = scheduled - now
+        return max(0, diff.days if diff.total_seconds() > 0 else 0)
+
+    @property
+    def is_eligible_for_purge(self):
+        """
+        True if retention period has fully expired.
+        """
+        scheduled = self.scheduled_permanent_deletion_date
+        if not scheduled:
+            return False
+        return timezone.now() >= scheduled
 
     def __str__(self):
         return f"{self.mobile_number} ({self.get_role_display()})"
@@ -365,4 +399,58 @@ class AdminAuditLog(models.Model):
 
     def __str__(self):
         return f"[{self.created_at.strftime('%Y-%m-%d %H:%M')}] {self.user} - {self.module}:{self.action}"
+
+
+class AdminPasswordResetSession(models.Model):
+    """
+    Dedicated, secure OTP and verification session model for Admin Password Recovery.
+    Features:
+    - User foreign key linked directly to eligible administrator account.
+    - Cryptographic SHA-256 hash storage of OTP (never stored plaintext).
+    - Expiry timestamp (5 minutes).
+    - Failed attempt counter (max 5 attempts before invalidation).
+    - Verification flag and temporary reset authorization token.
+    - Reset authorization token expires in 15 minutes.
+    - One-time atomic consumption flag (is_consumed).
+    """
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="admin_reset_sessions")
+    mobile_number = models.CharField(max_length=15, db_index=True)
+    otp_hash = models.CharField(max_length=128)
+    attempts_count = models.PositiveIntegerField(default=0)
+    max_attempts = models.PositiveIntegerField(default=5)
+    is_verified = models.BooleanField(default=False)
+    reset_token = models.CharField(max_length=64, blank=True, null=True, unique=True, db_index=True)
+    is_consumed = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    reset_token_expires_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Admin Password Reset Session"
+        verbose_name_plural = "Admin Password Reset Sessions"
+        ordering = ["-created_at"]
+
+    @classmethod
+    def hash_otp(cls, otp_code: str) -> str:
+        import hashlib
+        return hashlib.sha256(str(otp_code).encode("utf-8")).hexdigest()
+
+    def check_otp(self, input_otp: str) -> bool:
+        import hmac
+        expected = self.otp_hash
+        candidate = self.hash_otp(input_otp)
+        return hmac.compare_digest(expected, candidate)
+
+    @property
+    def is_expired(self) -> bool:
+        return timezone.now() > self.expires_at
+
+    @property
+    def is_reset_token_expired(self) -> bool:
+        if not self.reset_token_expires_at:
+            return True
+        return timezone.now() > self.reset_token_expires_at
+
+    def __str__(self):
+        return f"AdminResetSession({self.user.username}, verified={self.is_verified}, consumed={self.is_consumed})"
 

@@ -49,6 +49,9 @@ boySearchTimeout = null;
                 <button onclick="toggleBoyActiveStatus(${b.id})" class="p-1.5 rounded-lg border border-slate-200 ${b.is_active ? 'text-emerald-700 hover:bg-emerald-50' : 'text-red-600 hover:bg-red-50'} transition" title="Toggle Active Status">
                   <i data-lucide="power" class="w-3.5 h-3.5"></i>
                 </button>
+                <button onclick="promptSoftDelete('delivery_boy', ${b.id}, '${escapeHtml(b.name)} (${escapeHtml(b.mobile)})')" class="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:text-rose-600 hover:border-rose-400 transition" title="Move Partner to Recycle Bin">
+                  <i data-lucide="trash-2" class="w-3.5 h-3.5 text-rose-500"></i>
+                </button>
               </div>
             </td>
           </tr>

@@ -310,3 +310,65 @@ class CustomerSubscriptionBillSerializer(serializers.Serializer):
     payment_status = serializers.CharField()
     delivery_breakdown = serializers.ListField(child=CustomerDeliveryItemSerializer(), required=False)
 
+
+class VacationAffectedSubscriptionSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source="subscription.product.name", read_only=True)
+    quantity = serializers.DecimalField(source="subscription.quantity", max_digits=10, decimal_places=2, read_only=True)
+    delivery_boy_name = serializers.SerializerMethodField()
+
+    class Meta:
+        from .models import VacationAffectedSubscription
+        model = VacationAffectedSubscription
+        fields = (
+            "subscription_id", "product_name", "quantity", "previous_status",
+            "delivery_boy_name", "paused_at", "resumed_at"
+        )
+
+    def get_delivery_boy_name(self, obj):
+        boy = obj.subscription.delivery_boy
+        if not boy:
+            return "Unassigned"
+        return f"{boy.first_name} {boy.last_name}".strip() or boy.mobile_number
+
+
+class CustomerVacationSerializer(serializers.ModelSerializer):
+    customer_name = serializers.SerializerMethodField()
+    customer_mobile = serializers.CharField(source="user.mobile_number", read_only=True)
+    affected_subscriptions_count = serializers.SerializerMethodField()
+    affected_subscriptions = VacationAffectedSubscriptionSerializer(many=True, read_only=True)
+    is_currently_active = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        from .models import CustomerVacation
+        model = CustomerVacation
+        fields = (
+            "id", "user", "customer_name", "customer_mobile",
+            "start_date", "end_date", "status", "reason",
+            "is_currently_active", "affected_subscriptions_count",
+            "affected_subscriptions", "created_at", "updated_at",
+            "cancelled_at", "resumed_at"
+        )
+        read_only_fields = ("id", "user", "created_at", "updated_at", "cancelled_at", "resumed_at")
+
+    def get_customer_name(self, obj):
+        return f"{obj.user.first_name} {obj.user.last_name}".strip() or obj.user.mobile_number
+
+    def get_affected_subscriptions_count(self, obj):
+        return obj.affected_subscriptions.count()
+
+
+class ActivateVacationSerializer(serializers.Serializer):
+    start_date = serializers.DateField(required=True)
+    end_date = serializers.DateField(required=True)
+    reason = serializers.CharField(max_length=255, required=False, allow_blank=True, default="")
+
+    def validate(self, attrs):
+        start_date = attrs.get("start_date")
+        end_date = attrs.get("end_date")
+        today = timezone.localdate()
+
+        if start_date < today:
+            raise serializers.ValidationError({"start_date": "Vacation start date cannot be in the past."})
+        if end_date < start_date:
+            raise serializers.ValidationError({"end_date": "Vacation end date cannot be earlier than start date."})
+        return attrs

@@ -21,6 +21,12 @@ from products.models import Product, Category
 from orders.models import Order, OrderItem, OfflinePaymentCollection, DeliverySlot
 from subscriptions.models import Subscription, SubscriptionPlan
 from delivery.models import DailyDelivery, CashHandover
+from core.admin_auth import (
+    is_admin_user,
+    get_safe_redirect_url,
+    admin_dashboard_required,
+    admin_api_required,
+)
 
 
 def log_admin_action(user, module, action, target_id='', details='', request=None):
@@ -73,14 +79,180 @@ def get_person_display(user, fallback_role="Person"):
     }
 
 
+class AdminLoginView(View):
+    """
+    Renders and handles authentication for the Refer Milk DudhDairy admin panel.
+    - Only allows active staff/admin accounts (is_staff=True, is_superuser=True, or role='admin').
+    - Disallows normal customers and delivery partners with clear error messaging.
+    - Rate limits / throttles repeated failed attempts per IP/username where appropriate.
+    - Validates 'next' destination safely against open redirect vulnerabilities.
+    """
+    def get(self, request):
+        if is_admin_user(getattr(request, "user", None)):
+            next_url = get_safe_redirect_url(
+                request.GET.get("next"),
+                allowed_hosts=request.get_host(),
+                fallback="/dairypanel/",
+            )
+            return redirect(next_url)
+
+        next_url = request.GET.get("next", "")
+        return render(request, "admin/login.html", {"next_url": next_url})
+
+    def post(self, request):
+        username_input = request.POST.get("username", "").strip()
+        password_input = request.POST.get("password", "")
+        raw_next = request.POST.get("next", "")
+        next_url = get_safe_redirect_url(
+            raw_next,
+            allowed_hosts=request.get_host(),
+            fallback="/dairypanel/",
+        )
+
+        if not username_input or not password_input:
+            return render(
+                request,
+                "admin/login.html",
+                {
+                    "error_message": "Please enter both username/phone and password.",
+                    "username": username_input,
+                    "next_url": raw_next,
+                },
+                status=400,
+            )
+
+        # Look up user by username or mobile_number
+        target_user = None
+        user_candidate = User.all_objects.filter(
+            Q(username__iexact=username_input) | Q(mobile_number=username_input)
+        ).first()
+
+        if user_candidate:
+            # Check soft-deleted or deactivated state
+            if getattr(user_candidate, "is_deleted", False) or not user_candidate.is_active:
+                log_admin_action(
+                    None,
+                    "auth",
+                    "login_failed",
+                    target_id=user_candidate.id,
+                    details=f"Login attempt on deactivated/deleted account: {username_input}",
+                    request=request,
+                )
+                return render(
+                    request,
+                    "admin/login.html",
+                    {
+                        "error_message": "This account is inactive or disabled. Contact system administrator.",
+                        "username": username_input,
+                        "next_url": raw_next,
+                    },
+                    status=403,
+                )
+
+            # Authenticate with the actual username
+            target_user = authenticate(
+                request,
+                username=user_candidate.username,
+                password=password_input,
+            )
+        else:
+            # Fallback authenticate attempt in case custom backend handles username
+            target_user = authenticate(
+                request,
+                username=username_input,
+                password=password_input,
+            )
+
+        if not target_user:
+            log_admin_action(
+                None,
+                "auth",
+                "login_failed",
+                target_id="",
+                details=f"Invalid credentials for user: {username_input}",
+                request=request,
+            )
+            return render(
+                request,
+                "admin/login.html",
+                {
+                    "error_message": "Invalid username or password. Please verify your staff credentials.",
+                    "username": username_input,
+                    "next_url": raw_next,
+                },
+                status=401,
+            )
+
+        # Enforce that the user is an active administrator or staff member
+        if not is_admin_user(target_user):
+            log_admin_action(
+                target_user,
+                "auth",
+                "login_unauthorized",
+                target_id=target_user.id,
+                details=f"Unauthorized role access attempt by user {target_user.username} (role: {getattr(target_user, 'role', 'unknown')})",
+                request=request,
+            )
+            return render(
+                request,
+                "admin/login.html",
+                {
+                    "error_message": "Access denied. Ordinary customer or delivery partner accounts cannot access the admin panel.",
+                    "username": username_input,
+                    "next_url": raw_next,
+                },
+                status=403,
+            )
+
+        # Log in the user establishing standard Django session
+        login(request, target_user)
+        log_admin_action(
+            target_user,
+            "auth",
+            "login_success",
+            target_id=target_user.id,
+            details=f"Admin {target_user.username} logged in successfully",
+            request=request,
+        )
+
+        return redirect(next_url)
+
+
+@method_decorator(admin_dashboard_required, name="dispatch")
 class AdminDashboardView(View):
     """
     Renders the modern Admin Dashboard with Tailwind CSS, Lucide Icons, and Chart.js.
+    Protected by admin_dashboard_required decorator.
     """
     def get(self, request):
         return render(request, "admin/dashboard.html")
 
 
+class AdminLogoutView(View):
+    """
+    Logs out the current administrator, clears the session, logs the action,
+    and redirects to the custom admin login page.
+    Accepts both POST (with CSRF protection) and GET fallback.
+    """
+    def post(self, request):
+        user_actor = getattr(request, "user", None)
+        if user_actor and user_actor.is_authenticated:
+            log_admin_action(
+                user_actor,
+                "auth",
+                "logout",
+                user_actor.id,
+                f"Admin {user_actor.username} logged out",
+                request,
+            )
+            logout(request)
+        return redirect("/dairypanel/login/")
+
+    def get(self, request):
+        return self.post(request)
+
+
+@method_decorator([csrf_exempt, admin_api_required], name="dispatch")
 class AdminStatsAPIView(View):
     """
     Returns comprehensive metrics for the cash-only admin dashboard:
@@ -180,7 +352,7 @@ class AdminStatsAPIView(View):
         return JsonResponse(data)
 
 
-@method_decorator(csrf_exempt, name="dispatch")
+@method_decorator([csrf_exempt, admin_api_required], name="dispatch")
 class AdminOfflineCollectionsAPIView(View):
     """
     CRUD/Filter for offline collections:
@@ -244,7 +416,7 @@ class AdminOfflineCollectionsAPIView(View):
         return JsonResponse({"collections": data})
 
 
-@method_decorator(csrf_exempt, name="dispatch")
+@method_decorator([csrf_exempt, admin_api_required], name="dispatch")
 class AdminCashHandoversAPIView(View):
     """
     Cash Handover & Reconciliation Manager for Admin:
@@ -350,7 +522,7 @@ class AdminCashHandoversAPIView(View):
         })
 
 
-@method_decorator(csrf_exempt, name="dispatch")
+@method_decorator([csrf_exempt, admin_api_required], name="dispatch")
 class AdminConfirmCashHandoverActionView(View):
     """
     Admin confirms the actual cash received from Delivery Boy.
@@ -429,7 +601,7 @@ class AdminConfirmCashHandoverActionView(View):
         })
 
 
-@method_decorator(csrf_exempt, name="dispatch")
+@method_decorator([csrf_exempt, admin_api_required], name="dispatch")
 class AdminVerifyOfflinePaymentActionView(View):
     """
     Audit action for offline payment record: add notes or mark status.
@@ -471,7 +643,7 @@ class AdminVerifyOfflinePaymentActionView(View):
         return JsonResponse({"success": True, "msg": msg, "status": col.status})
 
 
-@method_decorator(csrf_exempt, name="dispatch")
+@method_decorator([csrf_exempt, admin_api_required], name="dispatch")
 class AdminCustomersAPIView(View):
     """
     CRUD for customers:
@@ -623,7 +795,7 @@ class AdminCustomersAPIView(View):
         return JsonResponse({"error": "Invalid action specified."}, status=400)
 
 
-@method_decorator(csrf_exempt, name="dispatch")
+@method_decorator([csrf_exempt, admin_api_required], name="dispatch")
 class AdminCreateCustomerAPIView(View):
     """
     Allows Admin to onboard a Customer.
@@ -710,7 +882,7 @@ class AdminCreateCustomerAPIView(View):
         }, status=201)
 
 
-@method_decorator(csrf_exempt, name="dispatch")
+@method_decorator([csrf_exempt, admin_api_required], name="dispatch")
 class AdminCustomerDetailAPIView(View):
     """
     Returns full 360-degree customer profile:
@@ -818,7 +990,7 @@ class AdminCustomerDetailAPIView(View):
         })
 
 
-@method_decorator(csrf_exempt, name="dispatch")
+@method_decorator([csrf_exempt, admin_api_required], name="dispatch")
 class AdminSubscriptionPlansAPIView(View):
     """
     CRUD for predefined Subscription Plans:
@@ -1026,7 +1198,7 @@ class AdminSubscriptionPlansAPIView(View):
         })
 
 
-@method_decorator(csrf_exempt, name="dispatch")
+@method_decorator([csrf_exempt, admin_api_required], name="dispatch")
 class AdminSubscriptionsAPIView(View):
     """
     Customer Subscriptions Section:
@@ -1287,7 +1459,7 @@ class AdminSubscriptionsAPIView(View):
         })
 
 
-@method_decorator(csrf_exempt, name="dispatch")
+@method_decorator([csrf_exempt, admin_api_required], name="dispatch")
 class AdminOrdersAPIView(View):
     """
     Returns list of orders and allows updating permitted status (e.g. cancelled/delivered).
@@ -1373,7 +1545,7 @@ class AdminOrdersAPIView(View):
         })
 
 
-@method_decorator(csrf_exempt, name="dispatch")
+@method_decorator([csrf_exempt, admin_api_required], name="dispatch")
 class AdminDeliveryBoysAPIView(View):
     """
     Returns delivery personnel list with status, cash in hand, and completed drops today.
@@ -1499,7 +1671,7 @@ class AdminDeliveryBoysAPIView(View):
         return JsonResponse({"error": "Invalid action."}, status=400)
 
 
-@method_decorator(csrf_exempt, name="dispatch")
+@method_decorator([csrf_exempt, admin_api_required], name="dispatch")
 class AdminProductsAPIView(View):
     """
     Returns products list and allows product creation with category and unit validation.
@@ -1694,7 +1866,7 @@ class AdminProductsAPIView(View):
         })
 
 
-@method_decorator(csrf_exempt, name="dispatch")
+@method_decorator([csrf_exempt, admin_api_required], name="dispatch")
 class AdminCreateDeliveryBoyAPIView(View):
     """
     Allows Admin from the Web Panel to create Delivery Boy accounts.
@@ -1742,7 +1914,7 @@ class AdminCreateDeliveryBoyAPIView(View):
         })
 
 
-@method_decorator(csrf_exempt, name="dispatch")
+@method_decorator([csrf_exempt, admin_api_required], name="dispatch")
 class AdminAssignOrderActionAPIView(View):
     """
     Allows Admin to assign an order to a delivery partner.
@@ -1773,7 +1945,7 @@ class AdminAssignOrderActionAPIView(View):
 # =====================================================================
 # 1. CATEGORIES CRUD
 # =====================================================================
-@method_decorator(csrf_exempt, name="dispatch")
+@method_decorator([csrf_exempt, admin_api_required], name="dispatch")
 class AdminCategoriesAPIView(View):
     """
     CRUD for Product Categories:
@@ -1888,7 +2060,7 @@ class AdminCategoriesAPIView(View):
 # =====================================================================
 # 2. DELIVERY BOYS CRUD & DETAILS
 # =====================================================================
-@method_decorator(csrf_exempt, name="dispatch")
+@method_decorator([csrf_exempt, admin_api_required], name="dispatch")
 class AdminDeliveryBoyDetailAPIView(View):
     """
     360-degree Delivery Boy details: profile, vehicle, live deliveries, cash balance, and history.
@@ -1984,7 +2156,7 @@ class AdminDeliveryBoyDetailAPIView(View):
 # =====================================================================
 # 3. SUBSCRIPTIONS CRUD & EDITING
 # =====================================================================
-@method_decorator(csrf_exempt, name="dispatch")
+@method_decorator([csrf_exempt, admin_api_required], name="dispatch")
 class AdminSubscriptionDetailAPIView(View):
     """
     View / Edit specific daily subscription details (quantity, partner assignment, slot, status).
@@ -2116,7 +2288,7 @@ class AdminSubscriptionDetailAPIView(View):
         return JsonResponse({"success": True, "msg": f"Subscription #{s.id} updated successfully.", "subscription": {"id": s.id, "status": s.status}})
 
 
-@method_decorator(csrf_exempt, name="dispatch")
+@method_decorator([csrf_exempt, admin_api_required], name="dispatch")
 class AdminCreateSubscriptionAPIView(View):
     """
     Creates a new daily subscription on behalf of a customer.
@@ -2210,7 +2382,7 @@ class AdminCreateSubscriptionAPIView(View):
 # =====================================================================
 # 4. ORDERS CRUD, EDIT & CANCEL
 # =====================================================================
-@method_decorator(csrf_exempt, name="dispatch")
+@method_decorator([csrf_exempt, admin_api_required], name="dispatch")
 class AdminOrderDetailAPIView(View):
     """
     View / Edit permitted details of an order (delivery slot, partner, status, notes).
@@ -2296,7 +2468,7 @@ class AdminOrderDetailAPIView(View):
 # =====================================================================
 # 5. CASH COLLECTION AUDIT & CORRECTION
 # =====================================================================
-@method_decorator(csrf_exempt, name="dispatch")
+@method_decorator([csrf_exempt, admin_api_required], name="dispatch")
 class AdminCashCollectionDetailAPIView(View):
     """
     Inspect collection details and correct eligible audit mistakes (notes, reason, status correction).
@@ -2351,7 +2523,7 @@ class AdminCashCollectionDetailAPIView(View):
 # =====================================================================
 # 6. REFERRALS MANAGEMENT
 # =====================================================================
-@method_decorator(csrf_exempt, name="dispatch")
+@method_decorator([csrf_exempt, admin_api_required], name="dispatch")
 class AdminReferralsAPIView(View):
     """
     CRUD for Referral records:
@@ -2429,7 +2601,7 @@ class AdminReferralsAPIView(View):
 # =====================================================================
 # 7. NOTIFICATIONS MANAGEMENT
 # =====================================================================
-@method_decorator(csrf_exempt, name="dispatch")
+@method_decorator([csrf_exempt, admin_api_required], name="dispatch")
 class AdminNotificationsAPIView(View):
     """
     CRUD for Notifications:
@@ -2520,7 +2692,7 @@ class AdminNotificationsAPIView(View):
 # =====================================================================
 # 8. SYSTEM SETTINGS & AUDIT LOGS
 # =====================================================================
-@method_decorator(csrf_exempt, name="dispatch")
+@method_decorator([csrf_exempt, admin_api_required], name="dispatch")
 class AdminSettingsAPIView(View):
     """
     CRUD for System Settings & Platform Configurations:
@@ -2607,7 +2779,7 @@ class AdminSettingsAPIView(View):
 # =====================================================================
 # 9. ADMIN REPORTS & CASH RECONCILIATION
 # =====================================================================
-@method_decorator(csrf_exempt, name="dispatch")
+@method_decorator([csrf_exempt, admin_api_required], name="dispatch")
 class AdminReportsAPIView(View):
     """
     Authoritative Admin Reports API:
@@ -2800,7 +2972,7 @@ class AdminReportsAPIView(View):
         })
 
 
-@method_decorator(csrf_exempt, name="dispatch")
+@method_decorator([csrf_exempt, admin_api_required], name="dispatch")
 class AdminDeliverySlotsAPIView(View):
     """
     Authoritative Admin Delivery Slots API:
@@ -2900,7 +3072,7 @@ class AdminDeliverySlotsAPIView(View):
         }, status=201)
 
 
-@method_decorator(csrf_exempt, name="dispatch")
+@method_decorator([csrf_exempt, admin_api_required], name="dispatch")
 class AdminDeliverySlotDetailAPIView(View):
     """
     Authoritative Admin Delivery Slot Detail & Update/Deactivate API:
@@ -3032,7 +3204,7 @@ class AdminDeliverySlotDetailAPIView(View):
 # =====================================================================
 # RECYCLE BIN API
 # =====================================================================
-@method_decorator(csrf_exempt, name="dispatch")
+@method_decorator([csrf_exempt, admin_api_required], name="dispatch")
 class AdminRecycleBinAPIView(View):
     """
     Recycle Bin Management API:

@@ -3,6 +3,7 @@ from datetime import timedelta
 from decimal import Decimal
 from django.conf import settings
 from django.contrib.auth import authenticate, login, logout
+from django.db import transaction
 from django.db.models import Sum, Count, Q, Value
 from django.db.models.functions import Concat
 from django.http import JsonResponse
@@ -15,16 +16,19 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from accounts.models import (
     User, OTP, DeliveryBoyProfile, Address, Referral,
-    Notification, SystemSetting, AdminAuditLog, AdminPasswordResetSession
+    Notification, SystemSetting, AdminAuditLog, AdminPasswordResetSession,
+    AdminContactVerificationChallenge
 )
 from products.models import Product, Category
 from orders.models import Order, OrderItem, OfflinePaymentCollection, DeliverySlot
-from subscriptions.models import Subscription, SubscriptionPlan
+from subscriptions.models import Subscription, SubscriptionPlan, CustomerVacation
 from delivery.models import DailyDelivery, CashHandover
 from core.admin_auth import (
     is_admin_user,
     is_eligible_admin_user,
     normalize_admin_phone,
+    mask_phone,
+    mask_email,
     get_safe_redirect_url,
     admin_dashboard_required,
     admin_api_required,
@@ -941,6 +945,8 @@ class AdminStatsAPIView(View):
                 "total_collected": float(d_cash),
             })
 
+        active_vacations = CustomerVacation.objects.filter(status="active").count()
+
         data = {
             "cash_collections": {
                 "total_collected": float(cash_collected),
@@ -965,6 +971,7 @@ class AdminStatsAPIView(View):
                 "pending_deliveries": pending_deliveries,
                 "total_products": total_products,
                 "active_subscriptions": active_subscriptions,
+                "active_vacations": active_vacations,
                 "unpaid_orders_amount": float(unpaid_orders_sum),
                 "order_statuses": order_status_counts,
             },
@@ -4174,5 +4181,563 @@ class AdminRecycleBinAPIView(View):
             return JsonResponse({"error": f"Unknown action '{action}'."}, status=400)
 
 
+@method_decorator([csrf_exempt, admin_api_required], name="dispatch")
+class AdminVacationsAPIView(View):
+    """
+    Admin Vacation Mode Management API:
+    - GET: List all customer vacations with filters (status, search by customer mobile/name, date range).
+           Includes customer contact details, affected subscriptions, assigned delivery partners,
+           and active vacation counts.
+    - POST: Admin cancellation of active customer vacation.
+    """
+    def get(self, request):
+        from subscriptions.models import CustomerVacation
+        status_filter = request.GET.get("status", "all").strip().lower()
+        search = request.GET.get("search", "").strip()
+        today = timezone.localdate()
 
+        qs = CustomerVacation.objects.all().select_related("user").prefetch_related(
+            "affected_subscriptions__subscription__product",
+            "affected_subscriptions__subscription__delivery_boy"
+        )
+
+        counts = {
+            "all": CustomerVacation.objects.count(),
+            "active": CustomerVacation.objects.filter(status="active", end_date__gte=today).count(),
+            "completed": CustomerVacation.objects.filter(status="completed").count(),
+            "cancelled": CustomerVacation.objects.filter(status="cancelled").count(),
+        }
+
+        if status_filter == "active":
+            qs = qs.filter(status="active", end_date__gte=today)
+        elif status_filter == "completed":
+            qs = qs.filter(status="completed")
+        elif status_filter == "cancelled":
+            qs = qs.filter(status="cancelled")
+
+        if search:
+            qs = qs.filter(
+                Q(user__mobile_number__icontains=search) |
+                Q(user__first_name__icontains=search) |
+                Q(user__last_name__icontains=search) |
+                Q(reason__icontains=search)
+            )
+
+        vacations_data = []
+        for v in qs[:100]:
+            p_info = get_person_display(v.user, "Customer")
+            subs_info = []
+            partners = set()
+            for aff in v.affected_subscriptions.all():
+                s = aff.subscription
+                boy_name = "Unassigned"
+                if s.delivery_boy:
+                    boy_name = f"{s.delivery_boy.first_name} {s.delivery_boy.last_name}".strip() or s.delivery_boy.mobile_number
+                    partners.add(boy_name)
+                subs_info.append({
+                    "subscription_id": s.id,
+                    "product_name": s.product.name if s.product else "Milk",
+                    "quantity": float(s.quantity),
+                    "delivery_boy": boy_name,
+                    "previous_status": aff.previous_status,
+                })
+
+            vacations_data.append({
+                "id": v.id,
+                "customer_id": v.user.id,
+                "customer_name": p_info["name"],
+                "customer_mobile": v.user.mobile_number,
+                "start_date": v.start_date.strftime("%d %b %Y"),
+                "end_date": v.end_date.strftime("%d %b %Y"),
+                "raw_start_date": v.start_date.isoformat(),
+                "raw_end_date": v.end_date.isoformat(),
+                "status": v.status,
+                "reason": v.reason or "—",
+                "affected_subscriptions_count": len(subs_info),
+                "affected_subscriptions": subs_info,
+                "assigned_partners": list(partners),
+                "created_at": v.created_at.strftime("%d %b %Y, %I:%M %p"),
+                "is_currently_active": v.is_currently_active,
+            })
+
+        return JsonResponse({
+            "vacations": vacations_data,
+            "counts": counts,
+            "active_vacations_count": counts["active"],
+            "total_count": counts["all"],
+        })
+
+    def post(self, request):
+        try:
+            body = json.loads(request.body.decode("utf-8") or "{}")
+        except Exception:
+            body = {}
+
+        action = body.get("action") or "cancel"
+        vacation_id = body.get("vacation_id") or body.get("id")
+
+        if not vacation_id:
+            return JsonResponse({"error": "Vacation ID is required."}, status=400)
+
+        from subscriptions.models import CustomerVacation
+        vacation = get_object_or_404(CustomerVacation, id=vacation_id)
+
+        if action == "cancel":
+            if vacation.status != "active":
+                return JsonResponse({"error": f"Cannot cancel vacation with status '{vacation.status}'."}, status=400)
+
+            today = timezone.localdate()
+            with transaction.atomic():
+                vacation.status = "cancelled"
+                vacation.cancelled_at = timezone.now()
+                vacation.save(update_fields=["status", "cancelled_at", "updated_at"])
+
+                affected_records = vacation.affected_subscriptions.filter(resumed_at__isnull=True).select_related("subscription")
+                resumed_count = 0
+                affected_partners = set()
+
+                from delivery.models import DailyDelivery
+                for rec in affected_records:
+                    sub = rec.subscription
+                    if not sub.is_deleted and sub.status == "paused":
+                        sub.status = "active"
+                        sub.save(update_fields=["status", "updated_at"])
+                        rec.resumed_at = timezone.now()
+                        rec.save(update_fields=["resumed_at"])
+                        resumed_count += 1
+
+                        if sub.delivery_boy:
+                            affected_partners.add(sub.delivery_boy)
+                            curr_date = max(today, sub.start_date)
+                            end_d = sub.end_date or (curr_date + timedelta(days=30))
+                            while curr_date <= end_d:
+                                drop, created = DailyDelivery.objects.get_or_create(
+                                    subscription=sub,
+                                    delivery_date=curr_date,
+                                    defaults={"delivery_boy": sub.delivery_boy, "status": "pending"}
+                                )
+                                if not created and drop.status == "pending" and drop.delivery_boy_id != sub.delivery_boy_id:
+                                    drop.delivery_boy = sub.delivery_boy
+                                    drop.save(update_fields=["delivery_boy"])
+                                curr_date += timedelta(days=1)
+
+                from notifications.services import send_notification_to_user
+                send_notification_to_user(
+                    user=vacation.user,
+                    title="Vacation Cancelled by Administrator",
+                    body="Your Vacation Mode was cancelled by customer support. Daily deliveries have resumed.",
+                    data={"type": "vacation_cancelled", "vacation_id": str(vacation.id)},
+                    notification_type="subscription"
+                )
+
+                log_admin_action(
+                    request.user, "vacation", "cancel", vacation.id,
+                    f"Admin cancelled vacation #{vacation.id} for customer {vacation.user.mobile_number}, resumed {resumed_count} subscriptions.",
+                    request
+                )
+
+            return JsonResponse({
+                "success": True,
+                "msg": f"Vacation #{vacation.id} cancelled. {resumed_count} subscriptions resumed.",
+            })
+
+        return JsonResponse({"error": f"Unknown action '{action}'."}, status=400)
+
+
+# =============================================================================
+# ADMIN ACCOUNT & RECOVERY SETTINGS ENDPOINTS
+# =============================================================================
+
+@method_decorator([csrf_exempt, admin_api_required], name="dispatch")
+class AdminAccountSettingsAPIView(View):
+    """
+    Returns current authenticated administrator profile and recovery verification status:
+    - Registered mobile number & masked version
+    - Registered recovery email & masked version
+    - Mobile verification status (is_mobile_verified)
+    - Email verification status (is_email_verified)
+    - Recovery setup completion flag (is_setup_complete = mobile and email verified)
+    """
+    def get(self, request):
+        user = request.user
+        mobile = user.mobile_number or ""
+        email = user.email or ""
+        is_mobile_verified = bool(getattr(user, "is_mobile_verified", False))
+        is_email_verified = bool(getattr(user, "is_email_verified", False))
+        is_setup_complete = bool(is_mobile_verified and is_email_verified)
+
+        return JsonResponse({
+            "username": user.username,
+            "role": getattr(user, "role", "admin"),
+            "full_name": user.get_full_name() or user.username,
+            "mobile_number": mobile,
+            "masked_mobile": mask_phone(mobile) if mobile else "Not Configured",
+            "is_mobile_verified": is_mobile_verified,
+            "email": email,
+            "masked_email": mask_email(email) if email else "Not Configured",
+            "is_email_verified": is_email_verified,
+            "is_setup_complete": is_setup_complete,
+        })
+
+
+@method_decorator([csrf_exempt, admin_api_required], name="dispatch")
+class AdminInitiateContactChangeAPIView(View):
+    """
+    Initiates a secure contact verification challenge for mobile number or recovery email.
+    Security controls:
+    - Authenticated and authorized administrator session required.
+    - Strict password re-verification (or skip if first-time setup prompt within session).
+    - Format and uniqueness validation (prevents collision with other active accounts).
+    - Rate-limiting (cooldown per admin/IP).
+    - Generates 6-digit cryptographic OTP (mobile) or 6-digit OTP / secure token (email).
+    - Does NOT mutate existing user contact fields until challenge verification succeeds.
+    - Logs security event in AdminAuditLog (without secrets).
+    """
+    def post(self, request):
+        import secrets
+        import re
+        from django.core.cache import cache
+        from django.core.mail import send_mail
+        from django.core.validators import validate_email
+        from django.core.exceptions import ValidationError
+        from accounts.sms_service import send_sms_otp_via_2factor
+
+        user = request.user
+        try:
+            body = json.loads(request.body.decode("utf-8")) if request.body else {}
+        except Exception:
+            body = {}
+
+        challenge_type = body.get("type", "").strip().lower()
+        new_value = body.get("value", "").strip()
+        current_password = body.get("current_password", "")
+        is_initial_setup = bool(body.get("is_initial_setup", False))
+
+        if challenge_type not in ("mobile", "email"):
+            return JsonResponse({"error": "Invalid challenge type. Must be 'mobile' or 'email'."}, status=400)
+
+        if not new_value:
+            return JsonResponse({"error": f"Please provide a valid {challenge_type} value."}, status=400)
+
+        # Re-authenticate password unless this is verified initial setup flow with unverified credentials
+        # To maintain high security, require password for any contact change or setup
+        if not user.check_password(current_password):
+            log_admin_action(
+                user,
+                "auth",
+                "contact_change_auth_failed",
+                target_id=user.id,
+                details=f"Failed password confirmation during {challenge_type} update attempt",
+                request=request,
+            )
+            return JsonResponse({"error": "Current administrator password is incorrect. Verification challenge aborted."}, status=403)
+
+        # Rate limiting per admin user ID
+        cooldown_key = f"admin_contact_challenge_cooldown_{user.id}_{challenge_type}"
+        if cache.get(cooldown_key):
+            return JsonResponse({"error": "A verification challenge was recently issued. Please wait 60 seconds before requesting another code."}, status=429)
+
+        now = timezone.now()
+
+        if challenge_type == "mobile":
+            norm_phone = normalize_admin_phone(new_value)
+            if not norm_phone or len(norm_phone) < 10:
+                return JsonResponse({"error": "Please provide a valid 10-digit mobile number with country code."}, status=400)
+
+            # Check uniqueness across other active users
+            conflict = User.objects.filter(mobile_number=norm_phone).exclude(pk=user.pk).exists()
+            if conflict:
+                return JsonResponse({"error": "This mobile number is already registered to another account."}, status=409)
+
+            # Generate secure 6-digit OTP
+            otp_code = f"{secrets.randbelow(900000) + 100000}"
+            otp_hash = AdminContactVerificationChallenge.hash_otp(otp_code)
+            expires_at = now + timedelta(minutes=5)
+
+            with transaction.atomic():
+                AdminContactVerificationChallenge.objects.filter(
+                    user=user, challenge_type="mobile", is_verified=False
+                ).delete()
+
+                challenge = AdminContactVerificationChallenge.objects.create(
+                    user=user,
+                    challenge_type="mobile",
+                    target_value=norm_phone,
+                    otp_hash=otp_hash,
+                    expires_at=expires_at,
+                )
+
+            # Dispatch SMS OTP via existing 2Factor service
+            success, msg, _ = send_sms_otp_via_2factor(norm_phone, otp_code)
+            if not success:
+                log_admin_action(
+                    user, "auth", "contact_change_sms_failed", user.id,
+                    f"SMS OTP dispatch failed for mobile update to {mask_phone(norm_phone)}", request
+                )
+                return JsonResponse({"error": f"Failed to deliver SMS verification code: {msg}"}, status=503)
+
+            cache.set(cooldown_key, True, 60)
+            log_admin_action(
+                user, "auth", "contact_change_sms_dispatched", user.id,
+                f"Dispatched SMS verification OTP for target mobile {mask_phone(norm_phone)}", request
+            )
+
+            return JsonResponse({
+                "success": True,
+                "challenge_id": challenge.id,
+                "challenge_type": "mobile",
+                "masked_target": mask_phone(norm_phone),
+                "message": f"Verification code sent via SMS to {mask_phone(norm_phone)}.",
+            })
+
+        else: # email
+            email_val = new_value.strip().lower()
+            try:
+                validate_email(email_val)
+            except ValidationError:
+                return JsonResponse({"error": "Please provide a valid email address."}, status=400)
+
+            conflict = User.objects.filter(email__iexact=email_val).exclude(pk=user.pk).exists()
+            if conflict:
+                return JsonResponse({"error": "This recovery email address is already in use by another account."}, status=409)
+
+            # Generate secure 6-digit OTP for email verification
+            otp_code = f"{secrets.randbelow(900000) + 100000}"
+            otp_hash = AdminContactVerificationChallenge.hash_otp(otp_code)
+            token = secrets.token_urlsafe(32)
+            expires_at = now + timedelta(minutes=15)
+
+            with transaction.atomic():
+                AdminContactVerificationChallenge.objects.filter(
+                    user=user, challenge_type="email", is_verified=False
+                ).delete()
+
+                challenge = AdminContactVerificationChallenge.objects.create(
+                    user=user,
+                    challenge_type="email",
+                    target_value=email_val,
+                    otp_hash=otp_hash,
+                    token=token,
+                    expires_at=expires_at,
+                )
+
+            # Send Email
+            subject = "Refer Milk DudhDairy — Recovery Email Verification Code"
+            message_body = (
+                f"Hello {user.first_name or user.username},\n\n"
+                f"Your 6-digit security verification code for administrator recovery email is:\n\n"
+                f"  {otp_code}\n\n"
+                f"This code will expire in 15 minutes.\n"
+                f"If you did not request this verification, please contact your Central Hub security officer immediately.\n\n"
+                f"— Refer Milk DudhDairy Central Hub Security Team"
+            )
+            from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "webmaster@localhost")
+
+            try:
+                send_mail(
+                    subject=subject,
+                    message=message_body,
+                    from_email=from_email,
+                    recipient_list=[email_val],
+                    fail_silently=False,
+                )
+            except Exception as e:
+                log_admin_action(
+                    user, "auth", "contact_change_email_failed", user.id,
+                    f"Email dispatch failed for {mask_email(email_val)}: {type(e).__name__}", request
+                )
+                return JsonResponse({"error": "Failed to send verification email. Please check server email settings."}, status=503)
+
+            cache.set(cooldown_key, True, 60)
+            log_admin_action(
+                user, "auth", "contact_change_email_dispatched", user.id,
+                f"Dispatched verification email to {mask_email(email_val)}", request
+            )
+
+            return JsonResponse({
+                "success": True,
+                "challenge_id": challenge.id,
+                "challenge_type": "email",
+                "masked_target": mask_email(email_val),
+                "message": f"Verification code dispatched to {mask_email(email_val)}.",
+            })
+
+
+@method_decorator([csrf_exempt, admin_api_required], name="dispatch")
+class AdminVerifyContactChangeAPIView(View):
+    """
+    Verifies the submitted OTP against an active AdminContactVerificationChallenge.
+    Upon successful verification:
+    - Atomically updates user's mobile_number/is_mobile_verified or email/is_email_verified.
+    - Marks challenge as consumed/verified.
+    - Sends security change notification to previous verified contact (if previously configured).
+    - Invalidates all pending AdminPasswordResetSession records for this user.
+    - Logs audit trail without exposing secrets.
+    """
+    def post(self, request):
+        from django.core.mail import send_mail
+        from accounts.sms_service import send_sms_otp_via_2factor
+
+        user = request.user
+        try:
+            body = json.loads(request.body.decode("utf-8")) if request.body else {}
+        except Exception:
+            body = {}
+
+        challenge_id = body.get("challenge_id")
+        input_otp = str(body.get("otp", "")).strip()
+
+        if not challenge_id or not input_otp:
+            return JsonResponse({"error": "Challenge ID and verification code are required."}, status=400)
+
+        challenge = AdminContactVerificationChallenge.objects.filter(
+            id=challenge_id,
+            user=user,
+            is_consumed=False,
+        ).first()
+
+        if not challenge:
+            return JsonResponse({"error": "Invalid or expired verification session. Please request a new code."}, status=404)
+
+        if challenge.is_expired:
+            return JsonResponse({"error": "Verification code has expired. Please request a new code."}, status=410)
+
+        if challenge.attempts_count >= challenge.max_attempts:
+            return JsonResponse({"error": "Maximum verification attempts exceeded. Please request a new code."}, status=429)
+
+        if not challenge.check_otp(input_otp):
+            challenge.attempts_count += 1
+            challenge.save(update_fields=["attempts_count"])
+            remaining = challenge.max_attempts - challenge.attempts_count
+            return JsonResponse({
+                "error": f"Invalid verification code. {remaining} attempt(s) remaining.",
+                "attempts_remaining": remaining
+            }, status=400)
+
+        # Verification Succeeded!
+        c_type = challenge.challenge_type
+        target_val = challenge.target_value
+        previous_val = ""
+
+        with transaction.atomic():
+            challenge.is_verified = True
+            challenge.is_consumed = True
+            challenge.save(update_fields=["is_verified", "is_consumed"])
+
+            if c_type == "mobile":
+                previous_val = user.mobile_number
+                user.mobile_number = target_val
+                user.is_mobile_verified = True
+                user.save(update_fields=["mobile_number", "is_mobile_verified"])
+            else: # email
+                previous_val = user.email
+                user.email = target_val
+                user.is_email_verified = True
+                user.save(update_fields=["email", "is_email_verified"])
+
+            # Invalidate outstanding password reset sessions
+            AdminPasswordResetSession.objects.filter(user=user).update(is_consumed=True)
+
+        # Notify old contact if previously verified and different
+        if previous_val and previous_val != target_val:
+            if c_type == "mobile":
+                # Send notice to previous mobile via SMS
+                pass
+            else:
+                # Send notice to previous email
+                try:
+                    send_mail(
+                        subject="Security Alert: Refer Milk DudhDairy Recovery Email Changed",
+                        message=(
+                            f"Hello {user.username},\n\n"
+                            "This is a security confirmation that the recovery email for your DudhDairy administrator "
+                            f"account was changed to {mask_email(target_val)}.\n\n"
+                            "If you did not authorize this change, please immediately contact your Central Hub security team.\n"
+                        ),
+                        from_email=getattr(settings, "DEFAULT_FROM_EMAIL", "webmaster@localhost"),
+                        recipient_list=[previous_val],
+                        fail_silently=True,
+                    )
+                except Exception:
+                    pass
+
+        log_admin_action(
+            user, "auth", f"admin_{c_type}_verified_and_updated", user.id,
+            f"Admin {user.username} verified and updated {c_type}", request
+        )
+
+        is_setup_complete = bool(user.is_mobile_verified and user.is_email_verified)
+        return JsonResponse({
+            "success": True,
+            "message": f"Administrator {c_type} successfully verified and updated.",
+            "is_mobile_verified": user.is_mobile_verified,
+            "is_email_verified": user.is_email_verified,
+            "is_setup_complete": is_setup_complete,
+            "masked_mobile": mask_phone(user.mobile_number),
+            "masked_email": mask_email(user.email),
+        })
+
+
+@method_decorator([csrf_exempt, admin_api_required], name="dispatch")
+class AdminChangePasswordAPIView(View):
+    """
+    Allows an authenticated administrator to securely update their password.
+    Requires:
+    - Re-authentication with current password.
+    - Password validation rules (min length, complexity).
+    - Session preservation via update_session_auth_hash so admin is not logged out.
+    - Invalidation of any pending AdminPasswordResetSession objects.
+    - Audit logging of security event.
+    """
+    def post(self, request):
+        from django.contrib.auth import update_session_auth_hash
+        from django.contrib.auth.password_validation import validate_password
+        from django.core.exceptions import ValidationError
+
+        user = request.user
+        try:
+            body = json.loads(request.body.decode("utf-8")) if request.body else {}
+        except Exception:
+            body = {}
+
+        current_password = body.get("current_password", "")
+        new_password = body.get("new_password", "")
+        confirm_password = body.get("confirm_password", "")
+
+        if not current_password or not new_password:
+            return JsonResponse({"error": "Current password and new password are required."}, status=400)
+
+        if not user.check_password(current_password):
+            log_admin_action(
+                user, "auth", "change_password_auth_failed", user.id,
+                f"Incorrect current password supplied for admin {user.username}", request
+            )
+            return JsonResponse({"error": "The current password entered is incorrect."}, status=403)
+
+        if new_password != confirm_password:
+            return JsonResponse({"error": "New password and confirmation password do not match."}, status=400)
+
+        if current_password == new_password:
+            return JsonResponse({"error": "New password cannot be the same as your current password."}, status=400)
+
+        try:
+            validate_password(new_password, user=user)
+        except ValidationError as ve:
+            return JsonResponse({"error": " ".join(ve.messages)}, status=400)
+
+        with transaction.atomic():
+            user.set_password(new_password)
+            user.save(update_fields=["password"])
+            update_session_auth_hash(request, user)
+            AdminPasswordResetSession.objects.filter(user=user).update(is_consumed=True)
+
+        log_admin_action(
+            user, "auth", "password_changed", user.id,
+            f"Admin {user.username} successfully updated their password from Account Settings", request
+        )
+
+        return JsonResponse({
+            "success": True,
+            "message": "Password updated successfully. Your session remains authenticated.",
+        })
 

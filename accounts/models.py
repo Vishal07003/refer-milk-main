@@ -39,6 +39,8 @@ class User(AbstractUser):
     )
 
     email = models.EmailField(max_length=255, blank=True, default="")
+    is_mobile_verified = models.BooleanField(default=False, help_text="Designates whether the user's mobile number is verified.")
+    is_email_verified = models.BooleanField(default=False, help_text="Designates whether the user's recovery email is verified.")
     profile_picture = models.ImageField(
         upload_to="profile_pictures/", blank=True, null=True
     )
@@ -453,4 +455,57 @@ class AdminPasswordResetSession(models.Model):
 
     def __str__(self):
         return f"AdminResetSession({self.user.username}, verified={self.is_verified}, consumed={self.is_consumed})"
+
+
+class AdminContactVerificationChallenge(models.Model):
+    """
+    Challenge session for verifying new mobile number or recovery email during
+    admin contact setup or contact change.
+    Features:
+    - Dedicated challenge type: 'mobile' or 'email'.
+    - Stores candidate contact value (target_value) without mutating the user record prematurely.
+    - Cryptographically hashed OTP (never plaintext).
+    - Failed attempt tracking (max 5).
+    - Expiry timestamp (5 minutes for OTP, 15 minutes for email token).
+    - Single-use consumption flag (is_consumed).
+    """
+    CHALLENGE_TYPES = (
+        ("mobile", "Mobile Number Verification"),
+        ("email", "Email Verification"),
+    )
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="contact_verification_challenges")
+    challenge_type = models.CharField(max_length=20, choices=CHALLENGE_TYPES)
+    target_value = models.CharField(max_length=255, help_text="New mobile number or recovery email being verified")
+    otp_hash = models.CharField(max_length=128)
+    token = models.CharField(max_length=64, blank=True, null=True, unique=True, db_index=True)
+    attempts_count = models.PositiveIntegerField(default=0)
+    max_attempts = models.PositiveIntegerField(default=5)
+    is_verified = models.BooleanField(default=False)
+    is_consumed = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+
+    class Meta:
+        verbose_name = "Admin Contact Verification Challenge"
+        verbose_name_plural = "Admin Contact Verification Challenges"
+        ordering = ["-created_at"]
+
+    @classmethod
+    def hash_otp(cls, otp_code: str) -> str:
+        import hashlib
+        return hashlib.sha256(str(otp_code).encode("utf-8")).hexdigest()
+
+    def check_otp(self, input_otp: str) -> bool:
+        import hmac
+        expected = self.otp_hash
+        candidate = self.hash_otp(input_otp)
+        return hmac.compare_digest(expected, candidate)
+
+    @property
+    def is_expired(self) -> bool:
+        return timezone.now() > self.expires_at
+
+    def __str__(self):
+        return f"ContactChallenge({self.user.username}, type={self.challenge_type}, verified={self.is_verified})"
 

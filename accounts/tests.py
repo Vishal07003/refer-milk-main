@@ -424,7 +424,7 @@ class AddressAPITests(TestCase):
             last_name="Tester",
         )
         self.client.force_authenticate(user=self.user)
-        self.address_url = reverse("address-list-create")
+        self.address_url = reverse("accounts:address-list-create")
 
     def test_create_address_with_actual_city_and_pincode(self):
         payload = {
@@ -457,7 +457,7 @@ class AddressAPITests(TestCase):
             state="Maharashtra",
             pincode="416001",
         )
-        detail_url = reverse("address-detail", kwargs={"pk": addr.id})
+        detail_url = reverse("accounts:address-detail", kwargs={"pk": addr.id})
 
         # Update to another distinct city & pincode
         update_payload = {

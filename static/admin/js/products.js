@@ -55,8 +55,11 @@ productSearchTimeout = null;
                 <button onclick="openEditProductModal(${p.id})" class="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-400 transition" title="Edit Product">
                   <i data-lucide="edit" class="w-3.5 h-3.5"></i>
                 </button>
-                <button onclick="toggleProductActive(${p.id})" class="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:text-amber-700 transition" title="Archive / Toggle">
-                  <i data-lucide="archive" class="w-3.5 h-3.5"></i>
+                <button onclick="toggleProductActive(${p.id})" class="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:text-amber-700 transition" title="Toggle Active Status">
+                  <i data-lucide="power" class="w-3.5 h-3.5"></i>
+                </button>
+                <button onclick="promptSoftDelete('product', ${p.id}, '${escapeHtml(p.name)}')" class="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:text-rose-600 hover:border-rose-400 transition" title="Move Product to Recycle Bin">
+                  <i data-lucide="trash-2" class="w-3.5 h-3.5 text-rose-500"></i>
                 </button>
               </div>
             </td>

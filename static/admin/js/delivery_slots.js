@@ -64,8 +64,11 @@ async function loadDeliverySlots() {
               <button onclick="openEditSlotModal(${s.id})" class="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:text-brand hover:border-brand transition" title="Edit Slot Name & Time Window">
                 <i data-lucide="edit" class="w-3.5 h-3.5"></i>
               </button>
-              <button onclick="toggleSlotActive(${s.id})" class="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:text-amber-700 hover:border-amber-300 transition" title="${s.is_active ? 'Deactivate Slot Safely' : 'Activate Slot'}">
+              <button onclick="toggleSlotActive(${s.id})" class="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:text-amber-700 hover:border-amber-300 transition" title="${s.is_active ? 'Deactivate Slot' : 'Activate Slot'}">
                 <i data-lucide="power" class="w-3.5 h-3.5"></i>
+              </button>
+              <button onclick="deleteDeliverySlotPrompt(${s.id}, '${escapeHtml(s.name)}', ${s.orders_count}, ${s.subscriptions_count})" class="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:text-rose-600 hover:border-rose-300 transition" title="Delete Delivery Slot">
+                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
               </button>
             </div>
           </td>
@@ -372,6 +375,40 @@ async function toggleSlotActive(slotId) {
     console.error('Error toggling slot status:', err);
     if (typeof showToast === 'function') {
       showToast('Network error while updating slot.', 'error');
+    }
+  }
+}
+
+async function deleteDeliverySlotPrompt(slotId, slotName, ordersCount, subsCount) {
+  let warning = `Are you sure you want to delete delivery slot "${slotName}"?`;
+  if (ordersCount > 0 || subsCount > 0) {
+    warning += `\n\nNotice: This slot has ${ordersCount} order(s) and ${subsCount} subscription(s). To preserve historical data, it will be safely deactivated rather than destroyed.`;
+  } else {
+    warning += '\n\nThis slot is unused and will be permanently removed.';
+  }
+
+  if (!confirm(warning)) return;
+
+  try {
+    const res = await fetch(`/api/admin/delivery-slots/${slotId}/`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    const data = await res.json();
+    if (res.ok) {
+      if (typeof showToast === 'function') {
+        showToast(data.msg || 'Slot updated successfully.');
+      }
+      loadDeliverySlots();
+    } else {
+      if (typeof showToast === 'function') {
+        showToast(data.error || 'Failed to delete slot.', true);
+      }
+    }
+  } catch (err) {
+    console.error('Error deleting slot:', err);
+    if (typeof showToast === 'function') {
+      showToast('Network error while deleting delivery slot.', true);
     }
   }
 }

@@ -2,7 +2,7 @@
 // Navigation & Tab Switching
 // ==========================================
 function switchTab(tab) {
-  const allTabs = ['dashboard', 'cash-handover', 'offline-payments', 'orders', 'delivery-boys', 'customers', 'subscription-plans', 'delivery-slots', 'subscriptions', 'products', 'categories', 'referrals', 'notifications', 'recycle-bin', 'settings', 'reports'];
+  const allTabs = ['dashboard', 'cash-handover', 'offline-payments', 'orders', 'delivery-boys', 'customers', 'subscription-plans', 'delivery-slots', 'subscriptions', 'vacations', 'products', 'categories', 'referrals', 'notifications', 'recycle-bin', 'settings', 'reports'];
   allTabs.forEach(t => {
     const content = document.getElementById(`content-${t}`);
     const btn = document.getElementById(`nav-btn-${t}`);
@@ -19,6 +19,9 @@ function switchTab(tab) {
       }
       if (t === 'recycle-bin' && typeof loadRecycleBin === 'function') {
         loadRecycleBin();
+      }
+      if (t === 'vacations' && typeof loadVacationsData === 'function') {
+        loadVacationsData();
       }
     } else {
       if (content) content.classList.add('hidden');

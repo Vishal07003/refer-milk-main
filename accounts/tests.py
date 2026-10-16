@@ -411,3 +411,80 @@ class TwoFactorSMSOTPTests(TestCase):
             {"mobile_number": "9123456789", "otp": otp_record.otp},
         )
         self.assertEqual(reuse_res.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class AddressAPITests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(
+            username="9111111111",
+            mobile_number="9111111111",
+            role="customer",
+            first_name="Address",
+            last_name="Tester",
+        )
+        self.client.force_authenticate(user=self.user)
+        self.address_url = reverse("address-list-create")
+
+    def test_create_address_with_actual_city_and_pincode(self):
+        payload = {
+            "label": "home",
+            "house_number": "Flat 101",
+            "street": "MG Road",
+            "area": "Camp",
+            "city": "Pune",
+            "state": "Maharashtra",
+            "pincode": "411001",
+            "country": "India",
+        }
+        res = self.client.post(self.address_url, payload, format="json")
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(res.data["address"]["city"], "Pune")
+        self.assertEqual(res.data["address"]["pincode"], "411001")
+        self.assertNotEqual(res.data["address"]["city"], "Sangola")
+        self.assertNotEqual(res.data["address"]["pincode"], "413307")
+
+    def test_update_existing_address_preserves_and_updates_exact_fields(self):
+        # Create initial address
+        from accounts.models import Address
+        addr = Address.objects.create(
+            user=self.user,
+            label="home",
+            house_number="B-204",
+            street="Station Link",
+            area="Sector 4",
+            city="Kolhapur",
+            state="Maharashtra",
+            pincode="416001",
+        )
+        detail_url = reverse("address-detail", kwargs={"pk": addr.id})
+
+        # Update to another distinct city & pincode
+        update_payload = {
+            "city": "Solapur",
+            "pincode": "413001",
+        }
+        res = self.client.put(detail_url, update_payload, format="json")
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.assertEqual(res.data["address"]["city"], "Solapur")
+        self.assertEqual(res.data["address"]["pincode"], "413001")
+
+        addr.refresh_from_db()
+        self.assertEqual(addr.city, "Solapur")
+        self.assertEqual(addr.pincode, "413001")
+
+    def test_create_address_requires_city_and_pincode(self):
+        # When city or pincode is missing or blank, backend rejects with 400
+        payload = {
+            "label": "home",
+            "house_number": "Flat 5",
+            "street": "Main Road",
+            "area": "Downtown",
+            "city": "",
+            "state": "Maharashtra",
+            "pincode": "",
+        }
+        res = self.client.post(self.address_url, payload, format="json")
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("city", res.data)
+        self.assertIn("pincode", res.data)

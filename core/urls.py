@@ -53,6 +53,10 @@ from core.admin_views import (
     AdminRecycleBinAPIView,
     AdminLoginView,
     AdminLogoutView,
+    AdminForgotPasswordView,
+    AdminResetPasswordConfirmView,
+    AdminVerifyOtpView,
+    AdminResetPasswordWithOtpView,
 )
 
 urlpatterns = [
@@ -60,6 +64,10 @@ urlpatterns = [
     path('dairypanel/', AdminDashboardView.as_view(), name='admin-dashboard'),
     path('dairypanel/login/', AdminLoginView.as_view(), name='admin-login'),
     path('dairypanel/logout/', AdminLogoutView.as_view(), name='admin-logout'),
+    path('dairypanel/forgot-password/', AdminForgotPasswordView.as_view(), name='admin-forgot-password'),
+    path('dairypanel/verify-otp/', AdminVerifyOtpView.as_view(), name='admin-verify-otp'),
+    path('dairypanel/reset-password-otp/<str:token>/', AdminResetPasswordWithOtpView.as_view(), name='admin-reset-password-otp'),
+    path('dairypanel/reset-password/<uidb64>/<token>/', AdminResetPasswordConfirmView.as_view(), name='admin-reset-password-confirm'),
     path('dashboard/', AdminDashboardView.as_view(), name='admin-dashboard-alias'),
     path('api/admin/logout/', AdminLogoutView.as_view(), name='api-admin-logout'),
     path('api/admin/stats/', AdminStatsAPIView.as_view(), name='admin-stats'),

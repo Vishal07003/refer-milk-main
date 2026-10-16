@@ -3,6 +3,9 @@ cachedSettings = [];
 settingsSearchTimeout = null;
 
     async function loadSettings() {
+      if (typeof loadAccountSettings === 'function') {
+        loadAccountSettings();
+      }
       const tbody = document.getElementById('settings-table-body');
       const auditTbody = document.getElementById('audit-logs-table-body');
       const searchVal = document.getElementById('settings-search-input')?.value.trim() || '';

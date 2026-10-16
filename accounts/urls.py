@@ -8,6 +8,7 @@ from .views import (
     DeviceTokenView,
     MarkAllNotificationsReadView,
     MarkNotificationReadView,
+    ClearAllNotificationsView,
     MyReferralsView,
     NotificationListView,
     ProfileCompletionView,
@@ -43,5 +44,10 @@ urlpatterns = [
         "notifications/read-all/",
         MarkAllNotificationsReadView.as_view(),
         name="notification-read-all",
+    ),
+    path(
+        "notifications/clear-all/",
+        ClearAllNotificationsView.as_view(),
+        name="notification-clear-all",
     ),
 ]

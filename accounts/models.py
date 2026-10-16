@@ -1,8 +1,15 @@
 import secrets
 import string
 
+from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.utils import timezone
+from core.soft_delete import (
+    SoftDeleteUserManager,
+    SoftDeleteQuerySet,
+    RecycleBinManager,
+)
 
 
 class User(AbstractUser):
@@ -39,9 +46,48 @@ class User(AbstractUser):
     )
     wallet_balance = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
 
+    # Soft Delete Fields
+    is_deleted = models.BooleanField(default=False, db_index=True)
+    deleted_at = models.DateTimeField(null=True, blank=True, db_index=True)
+    deleted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+        help_text="Admin who soft-deleted this user",
+    )
+
+    # Custom managers
+    objects = SoftDeleteUserManager()
+    all_objects = models.Manager.from_queryset(SoftDeleteQuerySet)()
+    deleted_objects = RecycleBinManager()
+
     class Meta:
         verbose_name = "User"
         verbose_name_plural = "Users"
+
+    def delete(self, using=None, keep_parents=False, hard=False, deleted_by=None):
+        if hard:
+            return super().delete(using=using, keep_parents=keep_parents)
+        self.is_deleted = True
+        self.is_active = False  # Deactivate credentials/tokens immediately
+        self.deleted_at = timezone.now()
+        if deleted_by:
+            self.deleted_by = deleted_by
+        self.save(update_fields=["is_deleted", "is_active", "deleted_at", "deleted_by"])
+        return 1, {self._meta.label: 1}
+
+    def hard_delete(self, using=None, keep_parents=False):
+        return super().delete(using=using, keep_parents=keep_parents)
+
+    def restore(self):
+        self.is_deleted = False
+        self.is_active = True
+        self.deleted_at = None
+        self.deleted_by = None
+        self.save(update_fields=["is_deleted", "is_active", "deleted_at", "deleted_by"])
+        return self
 
     def save(self, *args, **kwargs):
         if self.role == "customer" and (

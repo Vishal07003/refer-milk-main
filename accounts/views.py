@@ -381,6 +381,24 @@ class MarkAllNotificationsReadView(APIView):
         )
 
 
+class ClearAllNotificationsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Clear all notifications",
+        description="Delete all notifications for the authenticated user.",
+    )
+    def delete(self, request):
+        deleted_count, _ = Notification.objects.filter(user=request.user).delete()
+        return Response(
+            {
+                "msg": f"{deleted_count} notification(s) cleared successfully.",
+                "deleted_count": deleted_count,
+            },
+            status=200,
+        )
+
+
 import razorpay
 from decimal import Decimal
 from django.conf import settings

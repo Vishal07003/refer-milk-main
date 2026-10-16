@@ -13,6 +13,8 @@ class SendOTPSerializer(serializers.Serializer):
         digits_only = "".join(filter(str.isdigit, value))
         if len(digits_only) < 10:
             raise serializers.ValidationError("Invalid mobile number.")
+        if User.all_objects.filter(mobile_number=value, is_deleted=True).exists():
+            raise serializers.ValidationError("This account has been deleted or deactivated. Please contact support.")
         return value
 
     def create_otp(self, mobile_number):
@@ -49,12 +51,25 @@ class VerifyOTPSerializer(serializers.Serializer):
                 {"msg": "OTP has expired. Please request a new one."}
             )
 
+        # Check if an account with this mobile number is soft-deleted
+        deleted_user = User.all_objects.filter(mobile_number=mobile_number, is_deleted=True).first()
+        if deleted_user:
+            raise serializers.ValidationError(
+                {"msg": "This account has been deleted or deactivated. Please contact support."}
+            )
+
         attrs["otp_obj"] = otp
         return attrs
 
     def get_or_create_user(self, validated_data):
         mobile_number = validated_data["mobile_number"]
         otp_obj = validated_data["otp_obj"]
+
+        # Ensure we check all_objects for soft-deleted users
+        if User.all_objects.filter(mobile_number=mobile_number, is_deleted=True).exists():
+            raise serializers.ValidationError(
+                {"msg": "This account has been deleted or deactivated. Please contact support."}
+            )
 
         user, created = User.objects.get_or_create(
             mobile_number=mobile_number,

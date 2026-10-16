@@ -1,0 +1,100 @@
+<!-- SECTION 13: RECYCLE BIN & RETENTION -->
+<div id="content-recycle-bin" class="hidden space-y-6">
+
+  <!-- Header Banner -->
+  <div class="bg-gradient-to-r from-rose-900/90 via-slate-900 to-slate-950 p-6 rounded-2xl text-white shadow-sm border border-rose-500/20 relative overflow-hidden">
+    <div class="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div>
+        <div class="flex items-center space-x-2 text-rose-400 text-xs font-semibold uppercase tracking-wider mb-1">
+          <i data-lucide="trash-2" class="w-4 h-4"></i>
+          <span>Data Governance & Safety</span>
+        </div>
+        <h2 class="text-2xl font-black tracking-tight text-white">Recycle Bin</h2>
+        <p class="text-xs text-slate-300 mt-1 max-w-2xl">
+          Soft-deleted customers, delivery partners, products, and subscriptions. Historical order ledgers, cash collection receipts, and wallet audit records are permanently safeguarded.
+        </p>
+      </div>
+
+      <!-- Retention Policy Card -->
+      <div class="bg-slate-900/80 backdrop-blur-md p-4 rounded-xl border border-rose-500/30 flex items-center space-x-4 shadow-sm">
+        <div class="w-10 h-10 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center shrink-0">
+          <i data-lucide="clock" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <p class="text-[11px] font-medium text-slate-400">Configured Retention Period</p>
+          <div class="flex items-baseline space-x-1.5">
+            <span id="recycle-retention-days-display" class="text-xl font-black text-rose-400 font-mono">30</span>
+            <span class="text-xs font-semibold text-slate-300">Days</span>
+          </div>
+          <p class="text-[10px] text-slate-400 mt-0.5">Configurable via Settings & Audit</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Category Filter Tabs & Search Controls -->
+  <div class="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+    <!-- Entity Type Tabs -->
+    <div class="flex items-center space-x-1.5 overflow-x-auto pb-1 lg:pb-0 text-xs">
+      <button onclick="setRecycleTab('all')" id="recycle-tab-all" class="px-3 py-1.5 rounded-xl font-bold bg-slate-900 text-white shadow-xs transition flex items-center space-x-1.5">
+        <span>All Items</span>
+        <span id="recycle-count-all" class="px-1.5 py-0.2 rounded-full text-[10px] bg-white/20 text-white">0</span>
+      </button>
+      <button onclick="setRecycleTab('customers')" id="recycle-tab-customers" class="px-3 py-1.5 rounded-xl font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition flex items-center space-x-1.5">
+        <i data-lucide="users" class="w-3.5 h-3.5"></i>
+        <span>Customers</span>
+        <span id="recycle-count-customers" class="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-200 text-slate-700">0</span>
+      </button>
+      <button onclick="setRecycleTab('delivery_boys')" id="recycle-tab-delivery_boys" class="px-3 py-1.5 rounded-xl font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition flex items-center space-x-1.5">
+        <i data-lucide="truck" class="w-3.5 h-3.5"></i>
+        <span>Delivery Partners</span>
+        <span id="recycle-count-delivery_boys" class="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-200 text-slate-700">0</span>
+      </button>
+      <button onclick="setRecycleTab('products')" id="recycle-tab-products" class="px-3 py-1.5 rounded-xl font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition flex items-center space-x-1.5">
+        <i data-lucide="package" class="w-3.5 h-3.5"></i>
+        <span>Products</span>
+        <span id="recycle-count-products" class="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-200 text-slate-700">0</span>
+      </button>
+      <button onclick="setRecycleTab('subscriptions')" id="recycle-tab-subscriptions" class="px-3 py-1.5 rounded-xl font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition flex items-center space-x-1.5">
+        <i data-lucide="calendar" class="w-3.5 h-3.5"></i>
+        <span>Subscriptions</span>
+        <span id="recycle-count-subscriptions" class="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-200 text-slate-700">0</span>
+      </button>
+    </div>
+
+    <!-- Search Input & Refresh -->
+    <div class="flex items-center space-x-2">
+      <div class="relative w-full sm:w-64">
+        <i data-lucide="search" class="w-4 h-4 absolute left-3 top-2.5 text-slate-400"></i>
+        <input type="text" id="recycle-search-input" oninput="debounceRecycleSearch()" placeholder="Search deleted records..." class="admin-input pl-9 text-xs" />
+      </div>
+      <button onclick="loadRecycleBin()" class="p-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition" title="Refresh Recycle Bin">
+        <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- Records Table Card -->
+  <div class="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+    <div class="overflow-x-auto">
+      <table class="w-full text-left text-xs border-collapse">
+        <thead class="bg-slate-50/80 text-slate-500 font-bold border-b border-slate-200/80 uppercase tracking-wider text-[11px]">
+          <tr>
+            <th class="py-3 px-4">Entity Type</th>
+            <th class="py-3 px-4">Record Details</th>
+            <th class="py-3 px-4">Deleted At</th>
+            <th class="py-3 px-4">Deleted By</th>
+            <th class="py-3 px-4">Scheduled Purge Date</th>
+            <th class="py-3 px-4">Retention Status</th>
+            <th class="py-3 px-4 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="recycle-bin-table-body" class="divide-y divide-slate-100 text-slate-700">
+          <tr>
+            <td colspan="7" class="text-center py-12 text-slate-400">Loading Recycle Bin...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

@@ -82,12 +82,14 @@ async function refreshAllData() {
     { name: 'loadSubscriptionPlans', fn: typeof loadSubscriptionPlans === 'function' ? loadSubscriptionPlans : null },
     { name: 'loadDeliverySlots', fn: typeof loadDeliverySlots === 'function' ? loadDeliverySlots : null },
     { name: 'loadSubscriptions', fn: typeof loadSubscriptions === 'function' ? loadSubscriptions : null },
+    { name: 'loadVacationsData', fn: typeof loadVacationsData === 'function' ? loadVacationsData : null },
     { name: 'loadProducts', fn: typeof loadProducts === 'function' ? loadProducts : null },
     { name: 'loadCategories', fn: typeof loadCategories === 'function' ? loadCategories : null },
     { name: 'loadReferrals', fn: typeof loadReferrals === 'function' ? loadReferrals : null },
     { name: 'loadNotifications', fn: typeof loadNotifications === 'function' ? loadNotifications : null },
     { name: 'loadRecycleBin', fn: typeof loadRecycleBin === 'function' ? loadRecycleBin : null },
     { name: 'loadSettings', fn: typeof loadSettings === 'function' ? loadSettings : null },
+    { name: 'loadAccountSettings', fn: typeof loadAccountSettings === 'function' ? loadAccountSettings : null },
     { name: 'loadReports', fn: typeof loadReports === 'function' ? loadReports : null },
   ];
 

@@ -189,7 +189,10 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = "/static/"
-STATICFILES_DIRS = [BASE_DIR / "static"]
+STATIC_ROOT = BASE_DIR / "staticfiles"
+STATICFILES_DIRS = [
+    BASE_DIR / "static",
+]
 
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
@@ -254,3 +257,24 @@ if _csrf_origins_env:
 # 2Factor SMS Gateway Configuration
 TWOFACTOR_API_KEY = os.getenv("TWOFACTOR_API_KEY", "").strip()
 TWOFACTOR_OTP_TEMPLATE_NAME = os.getenv("TWOFACTOR_OTP_TEMPLATE_NAME", "").strip()
+
+# Custom Admin Authentication and Session Security Settings
+LOGIN_URL = "/dairypanel/login/"
+LOGIN_REDIRECT_URL = "/dairypanel/"
+LOGOUT_REDIRECT_URL = "/dairypanel/login/"
+
+# Hardened Session and Cookie Security
+SESSION_ENGINE = "django.contrib.sessions.backends.db"
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_AGE = 86400 * 7  # 7 days
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
+SESSION_SAVE_EVERY_REQUEST = True
+CSRF_COOKIE_HTTPONLY = False  # Allows standard frontend JS to read csrftoken for AJAX
+CSRF_COOKIE_AGE = 86400 * 7
+
+# Ensure HTTPS-only cookies in production environment
+if not DEBUG:
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_BROWSER_XSS_FILTER = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True

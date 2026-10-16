@@ -50,6 +50,9 @@ currentCustomerStatusFilter = 'all';
                 <button onclick="openEditCustomerModal(${u.id})" class="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-400 transition" title="Edit Profile">
                   <i data-lucide="edit" class="w-3.5 h-3.5"></i>
                 </button>
+                <button onclick="promptSoftDelete('customer', ${u.id}, '${escapeHtml(u.name)} (${escapeHtml(u.mobile)})')" class="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:text-rose-600 hover:border-rose-400 transition" title="Move Customer to Recycle Bin">
+                  <i data-lucide="trash-2" class="w-3.5 h-3.5 text-rose-500"></i>
+                </button>
               </div>
             </td>
           </tr>

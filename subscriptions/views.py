@@ -8,11 +8,18 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from django.db import transaction as db_transaction
+from django.db import transaction, transaction as db_transaction
 from accounts.models import Address, Notification, User, Wallet, WalletTransaction
 from orders.models import DeliverySlot
 
-from .models import Payment, ReferralDiscountTier, Subscription, SubscriptionPlan
+from .models import (
+    Payment,
+    ReferralDiscountTier,
+    Subscription,
+    SubscriptionPlan,
+    CustomerVacation,
+    VacationAffectedSubscription,
+)
 from .serializers import (
     CancelSubscriptionSerializer,
     CreatePaymentSerializer,
@@ -25,6 +32,9 @@ from .serializers import (
     UpdateCustomerSubscriptionSerializer,
     CustomerSubscriptionBillSerializer,
     CustomerDeliveryItemSerializer,
+    VacationAffectedSubscriptionSerializer,
+    CustomerVacationSerializer,
+    ActivateVacationSerializer,
 )
 
 
@@ -1129,3 +1139,288 @@ class WalletVerifyPaymentView(APIView):
             {"msg": "Online payments and wallet top-ups are disabled. DudhDairy is strictly Cash Only."},
             status=410,
         )
+
+
+class CustomerVacationCurrentView(APIView):
+    """
+    Get the authenticated customer's current vacation status and active vacation details.
+    """
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Get customer vacation status",
+        description="Returns whether the authenticated customer currently has an active vacation mode, active dates, and affected subscriptions."
+    )
+    def get(self, request):
+        today = timezone.localdate()
+        vacation = CustomerVacation.objects.filter(
+            user=request.user,
+            status="active",
+            end_date__gte=today
+        ).order_by("-created_at").first()
+
+        eligible_subs_count = Subscription.objects.filter(
+            user=request.user,
+            is_deleted=False,
+            status="active"
+        ).count()
+
+        data = {
+            "is_vacation_active": vacation is not None,
+            "vacation": CustomerVacationSerializer(vacation).data if vacation else None,
+            "eligible_subscriptions_count": eligible_subs_count,
+        }
+        return Response({"success": True, "data": data}, status=200)
+
+
+class CustomerVacationActivateView(APIView):
+    """
+    Activate Vacation Mode for the authenticated customer:
+    - Atomically pauses all eligible 'active' subscriptions
+    - Preserves already paused/cancelled subscriptions and tracks which were paused by vacation
+    - Safely removes upcoming pending DailyDelivery records within vacation window (delivery_date >= start_date and <= end_date)
+    - Preserves completed/failed/out_for_delivery deliveries and historical ledgers
+    - Notifies customer, assigned delivery partners, and creates admin notification
+    """
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Activate Customer Vacation Mode",
+        description="Pause all active subscriptions belonging to the customer across the specified date range safely and idempotently."
+    )
+    def post(self, request):
+        serializer = ActivateVacationSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response({"success": False, "errors": serializer.errors}, status=400)
+
+        start_date = serializer.validated_data["start_date"]
+        end_date = serializer.validated_data["end_date"]
+        reason = serializer.validated_data.get("reason", "").strip()
+        today = timezone.localdate()
+
+        # Idempotency / Overlap check
+        existing_active = CustomerVacation.objects.filter(
+            user=request.user,
+            status="active",
+            end_date__gte=today
+        ).first()
+
+        if existing_active:
+            # If exact same dates, return current vacation idempotently
+            if existing_active.start_date == start_date and existing_active.end_date == end_date:
+                return Response({
+                    "success": True,
+                    "msg": "Vacation Mode is already active for these dates.",
+                    "vacation": CustomerVacationSerializer(existing_active).data
+                }, status=200)
+            return Response({
+                "success": False,
+                "msg": f"An active vacation already exists from {existing_active.start_date} to {existing_active.end_date}. Cancel it first to reschedule."
+            }, status=400)
+
+        with transaction.atomic():
+            # 1. Create Vacation Record
+            vacation = CustomerVacation.objects.create(
+                user=request.user,
+                start_date=start_date,
+                end_date=end_date,
+                reason=reason,
+                status="active"
+            )
+
+            # 2. Find eligible active subscriptions
+            eligible_subs = list(Subscription.objects.filter(
+                user=request.user,
+                is_deleted=False,
+                status="active"
+            ).select_related("product", "delivery_boy"))
+
+            if not eligible_subs:
+                # Return informative message if user has no active subscriptions
+                return Response({
+                    "success": True,
+                    "msg": "Vacation Mode activated. Note: You currently have no active daily subscriptions.",
+                    "vacation": CustomerVacationSerializer(vacation).data,
+                    "paused_subscriptions_count": 0
+                }, status=200)
+
+            affected_partners = set()
+
+            for sub in eligible_subs:
+                # Record affected sub
+                VacationAffectedSubscription.objects.create(
+                    vacation=vacation,
+                    subscription=sub,
+                    previous_status="active"
+                )
+
+                # Set status to paused
+                sub.status = "paused"
+                sub.save(update_fields=["status", "updated_at"])
+
+                # Remove pending future deliveries within the vacation range
+                from delivery.models import DailyDelivery
+                DailyDelivery.objects.filter(
+                    subscription=sub,
+                    delivery_date__gte=max(today, start_date),
+                    delivery_date__lte=end_date,
+                    status="pending"
+                ).delete()
+
+                if sub.delivery_boy:
+                    affected_partners.add(sub.delivery_boy)
+
+            # 3. Notifications to Customer
+            from notifications.services import send_notification_to_user
+            send_notification_to_user(
+                user=request.user,
+                title="Vacation Mode Activated",
+                body=f"Vacation mode enabled from {start_date.strftime('%d %b %Y')} to {end_date.strftime('%d %b %Y')}. All daily deliveries are on hold.",
+                data={
+                    "type": "vacation_activated",
+                    "vacation_id": str(vacation.id),
+                    "start_date": str(start_date),
+                    "end_date": str(end_date),
+                },
+                notification_type="subscription"
+            )
+
+            # 4. Notifications to Affected Delivery Partners
+            cust_name = f"{request.user.first_name} {request.user.last_name}".strip() or request.user.mobile_number
+            for partner in affected_partners:
+                send_notification_to_user(
+                    user=partner,
+                    title="Customer Vacation Pause",
+                    body=f"Customer {cust_name} ({request.user.mobile_number}) enabled Vacation Mode from {start_date.strftime('%d %b')} to {end_date.strftime('%d %b')}. Deliveries are paused.",
+                    data={
+                        "type": "partner_vacation_pause",
+                        "customer_id": str(request.user.id),
+                        "customer_mobile": str(request.user.mobile_number),
+                        "start_date": str(start_date),
+                        "end_date": str(end_date),
+                    },
+                    notification_type="subscription"
+                )
+
+            # 5. Create in-app admin notification / audit log
+            from accounts.models import AdminAuditLog
+            try:
+                AdminAuditLog.objects.create(
+                    user=request.user,
+                    module="vacation",
+                    action="activate",
+                    target_id=str(vacation.id),
+                    details=f"Customer {request.user.mobile_number} activated Vacation Mode from {start_date} to {end_date} pausing {len(eligible_subs)} subscriptions.",
+                )
+            except Exception:
+                pass
+
+        return Response({
+            "success": True,
+            "msg": f"Vacation Mode activated successfully ({len(eligible_subs)} subscriptions paused).",
+            "vacation": CustomerVacationSerializer(vacation).data,
+            "paused_subscriptions_count": len(eligible_subs)
+        }, status=201)
+
+
+class CustomerVacationCancelView(APIView):
+    """
+    Cancel active Vacation Mode early:
+    - Atomically resumes only the subscriptions that were paused by this specific vacation
+    - Preserves subscriptions that were already paused before vacation or cancelled since
+    - Re-generates upcoming DailyDelivery records with assigned delivery partners
+    - Notifies customer and affected delivery partners
+    """
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(
+        summary="Cancel Customer Vacation Mode early",
+        description="Cancels active vacation and safely resumes only the subscriptions that this vacation paused."
+    )
+    def post(self, request):
+        today = timezone.localdate()
+        vacation = CustomerVacation.objects.filter(
+            user=request.user,
+            status="active"
+        ).order_by("-created_at").first()
+
+        if not vacation:
+            return Response({
+                "success": False,
+                "msg": "No active vacation found to cancel."
+            }, status=404)
+
+        with transaction.atomic():
+            vacation.status = "cancelled"
+            vacation.cancelled_at = timezone.now()
+            vacation.save(update_fields=["status", "cancelled_at", "updated_at"])
+
+            affected_records = vacation.affected_subscriptions.filter(resumed_at__isnull=True).select_related("subscription")
+            resumed_count = 0
+            affected_partners = set()
+
+            from delivery.models import DailyDelivery
+            for rec in affected_records:
+                sub = rec.subscription
+                # Only resume if subscription is currently paused and not deleted/cancelled
+                if not sub.is_deleted and sub.status == "paused":
+                    sub.status = "active"
+                    sub.save(update_fields=["status", "updated_at"])
+                    rec.resumed_at = timezone.now()
+                    rec.save(update_fields=["resumed_at"])
+                    resumed_count += 1
+
+                    # Re-generate future daily deliveries if partner assigned
+                    if sub.delivery_boy:
+                        affected_partners.add(sub.delivery_boy)
+                        curr_date = max(today, sub.start_date)
+                        end_d = sub.end_date or (curr_date + timedelta(days=30))
+                        while curr_date <= end_d:
+                            drop, created = DailyDelivery.objects.get_or_create(
+                                subscription=sub,
+                                delivery_date=curr_date,
+                                defaults={"delivery_boy": sub.delivery_boy, "status": "pending"}
+                            )
+                            if not created and drop.status == "pending" and drop.delivery_boy_id != sub.delivery_boy_id:
+                                drop.delivery_boy = sub.delivery_boy
+                                drop.save(update_fields=["delivery_boy"])
+                            curr_date += timedelta(days=1)
+
+            # Notifications
+            from notifications.services import send_notification_to_user
+            send_notification_to_user(
+                user=request.user,
+                title="Vacation Mode Cancelled",
+                body="Your Vacation Mode was cancelled early. Your daily milk deliveries have resumed.",
+                data={"type": "vacation_cancelled", "vacation_id": str(vacation.id)},
+                notification_type="subscription"
+            )
+
+            cust_name = f"{request.user.first_name} {request.user.last_name}".strip() or request.user.mobile_number
+            for partner in affected_partners:
+                send_notification_to_user(
+                    user=partner,
+                    title="Customer Deliveries Resumed",
+                    body=f"Customer {cust_name} cancelled their vacation. Assigned morning deliveries have resumed.",
+                    data={"type": "partner_vacation_resumed", "customer_id": str(request.user.id)},
+                    notification_type="subscription"
+                )
+
+            from accounts.models import AdminAuditLog
+            try:
+                AdminAuditLog.objects.create(
+                    user=request.user,
+                    module="vacation",
+                    action="cancel",
+                    target_id=str(vacation.id),
+                    details=f"Customer {request.user.mobile_number} cancelled Vacation Mode #{vacation.id} early. Resumed {resumed_count} subscriptions.",
+                )
+            except Exception:
+                pass
+
+        return Response({
+            "success": True,
+            "msg": f"Vacation Mode cancelled. {resumed_count} subscriptions resumed successfully.",
+            "vacation": CustomerVacationSerializer(vacation).data,
+            "resumed_subscriptions_count": resumed_count
+        }, status=200)

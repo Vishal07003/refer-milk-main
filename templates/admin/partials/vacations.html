@@ -1,0 +1,69 @@
+<!-- SECTION 6C: CUSTOMER VACATIONS -->
+<div id="content-vacations" class="space-y-5 hidden">
+  <div class="bg-white rounded-2xl p-6 border border-slate-200/80 shadow-xs space-y-5">
+    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+      <div>
+        <div class="flex items-center space-x-2">
+          <h3 class="text-lg font-bold text-slate-900 tracking-tight">Customer Vacation Mode</h3>
+          <span id="vacation-active-badge" class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200">0 Active</span>
+        </div>
+        <p class="text-xs text-slate-500 mt-0.5">Track account-wide vacation pauses, affected subscriptions, delivery partner updates, and early cancellations.</p>
+      </div>
+      <button onclick="loadVacationsData()" class="flex items-center space-x-2 px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition">
+        <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+        <span>Refresh</span>
+      </button>
+    </div>
+
+    <!-- Status Filters and Search Toolbar -->
+    <div class="flex flex-wrap items-center justify-between gap-3 pt-1">
+      <div class="flex flex-wrap items-center gap-2">
+        <button onclick="filterVacationStatus('all')" id="vac-filter-all" class="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-800 text-white shadow-xs transition">All Records</button>
+        <button onclick="filterVacationStatus('active')" id="vac-filter-active" class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 transition flex items-center space-x-1.5">
+          <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+          <span>Currently Active</span>
+        </button>
+        <button onclick="filterVacationStatus('completed')" id="vac-filter-completed" class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 transition">Completed</button>
+        <button onclick="filterVacationStatus('cancelled')" id="vac-filter-cancelled" class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 transition">Cancelled Early</button>
+      </div>
+
+      <div class="flex items-center space-x-2 w-full sm:w-auto">
+        <div class="search-input-wrapper w-full sm:w-72">
+          <i data-lucide="search" class="search-icon"></i>
+          <input type="text" id="vac-search-input" onkeyup="debounceVacationSearch()" placeholder="Search customer name or phone..." class="w-full text-xs py-2 px-3 pl-8 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-800" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Vacations Table -->
+    <div class="overflow-x-auto rounded-xl border border-slate-200/90">
+      <table class="w-full text-left border-collapse text-xs">
+        <thead>
+          <tr class="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[10px]">
+            <th class="py-3.5 px-4">VACATION ID</th>
+            <th class="py-3.5 px-4">CUSTOMER</th>
+            <th class="py-3.5 px-4">START DATE</th>
+            <th class="py-3.5 px-4">END DATE</th>
+            <th class="py-3.5 px-4">AFFECTED SUBSCRIPTIONS</th>
+            <th class="py-3.5 px-4">DELIVERY PARTNER</th>
+            <th class="py-3.5 px-4">STATUS</th>
+            <th class="py-3.5 px-4">CREATED AT</th>
+            <th class="py-3.5 px-4 text-right">ACTIONS</th>
+          </tr>
+        </thead>
+        <tbody id="vacations-table-body" class="divide-y divide-slate-100 bg-white">
+          <tr>
+            <td colspan="9" class="text-center py-10 text-slate-400">Loading vacations...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination / Count Bar -->
+    <div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2 text-xs text-slate-500">
+      <div>
+        <span>Total Records: <strong class="text-slate-800" id="vac-total-count">0</strong></span>
+      </div>
+    </div>
+  </div>
+</div>

@@ -86,6 +86,7 @@ async function refreshAllData() {
     { name: 'loadCategories', fn: typeof loadCategories === 'function' ? loadCategories : null },
     { name: 'loadReferrals', fn: typeof loadReferrals === 'function' ? loadReferrals : null },
     { name: 'loadNotifications', fn: typeof loadNotifications === 'function' ? loadNotifications : null },
+    { name: 'loadRecycleBin', fn: typeof loadRecycleBin === 'function' ? loadRecycleBin : null },
     { name: 'loadSettings', fn: typeof loadSettings === 'function' ? loadSettings : null },
     { name: 'loadReports', fn: typeof loadReports === 'function' ? loadReports : null },
   ];

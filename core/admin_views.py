@@ -607,6 +607,19 @@ class AdminCustomersAPIView(View):
                 "msg": f"Customer {customer.mobile_number} profile updated.",
             })
 
+        elif action == "delete":
+            # Soft-delete customer and cancel active subscriptions to prevent future deliveries
+            for sub in customer.subscriptions.filter(is_deleted=False):
+                sub.delete(deleted_by=request.user if request.user.is_authenticated else None)
+
+            customer.delete(deleted_by=request.user if request.user.is_authenticated else None)
+            log_admin_action(request.user, "customers", "delete", customer.id, f"Soft-deleted customer {customer.mobile_number} to Recycle Bin", request)
+            return JsonResponse({
+                "success": True,
+                "msg": f"Customer {customer.mobile_number} moved to Recycle Bin. Future deliveries stopped; order and payment records preserved.",
+                "action": "soft_deleted",
+            })
+
         return JsonResponse({"error": "Invalid action specified."}, status=400)
 
 
@@ -1253,38 +1266,16 @@ class AdminSubscriptionsAPIView(View):
 
         elif action == "delete":
             user_actor = getattr(request, "user", None)
-            today = timezone.localdate()
-            # Check if this subscription has any delivered/fulfilled history
-            has_delivered_history = DailyDelivery.objects.filter(subscription=sub).exclude(status="pending").exists()
-            is_pending = (sub.status == "pending")
-
-            if is_pending and not has_delivered_history:
-                # Safe complete removal of unapproved pending request with no historical drops
-                DailyDelivery.objects.filter(subscription=sub).delete()
-                sub_id_deleted = sub.id
-                sub.delete()
-                log_admin_action(user_actor, "subscriptions", "delete", sub_id_deleted, f"Deleted pending subscription #{sub_id_deleted}", request)
-                return JsonResponse({
-                    "success": True,
-                    "msg": f"Pending subscription #{sub_id_deleted} removed successfully.",
-                    "action": "deleted"
-                })
-            else:
-                # Active/paused/cancelled or has delivery history:
-                # Soft-delete / archive safely so orders, past deliveries, and cash records are 100% preserved!
-                sub.status = "cancelled"
-                if not sub.cancelled_at:
-                    sub.cancelled_at = timezone.now()
-                sub.save(update_fields=["status", "cancelled_at", "updated_at"])
-                # Remove only future unfulfilled pending deliveries
-                DailyDelivery.objects.filter(subscription=sub, delivery_date__gte=today, status="pending").delete()
-                log_admin_action(user_actor, "subscriptions", "archive", sub.id, f"Archived/cancelled subscription #{sub.id} (history preserved)", request)
-                return JsonResponse({
-                    "success": True,
-                    "msg": f"Subscription #{sub.id} archived and future deliveries stopped. Historical records preserved.",
-                    "status": "cancelled",
-                    "action": "archived"
-                })
+            if not user_actor or not user_actor.is_authenticated:
+                user_actor = None
+            sub.delete(deleted_by=user_actor)
+            log_admin_action(user_actor, "subscriptions", "delete", sub.id, f"Soft-deleted subscription #{sub.id} to Recycle Bin", request)
+            return JsonResponse({
+                "success": True,
+                "msg": f"Subscription #{sub.id} moved to Recycle Bin. Future drops cancelled; delivery/payment history preserved.",
+                "status": "cancelled",
+                "action": "soft_deleted"
+            })
 
         else:
             return JsonResponse({"error": f"Unknown action: {action}"}, status=400)
@@ -1489,13 +1480,21 @@ class AdminDeliveryBoysAPIView(View):
                 "msg": f"Partner {boy.mobile_number} is now {'On Duty' if profile.is_available else 'Off Duty'}.",
                 "is_available": profile.is_available,
             })
-        elif action == "toggle_active":
-            boy.is_active = not boy.is_active
-            boy.save(update_fields=["is_active"])
+        elif action == "delete":
+            profile.is_available = False
+            profile.save(update_fields=["is_available"])
+            boy.delete(deleted_by=request.user if request.user.is_authenticated else None)
+
+            # Cancel unfulfilled pending future daily deliveries assigned to deleted partner
+            today = timezone.localdate()
+            DailyDelivery.objects.filter(delivery_boy=boy, delivery_date__gte=today, status="pending").delete()
+            Order.objects.filter(delivery_boy=boy, status__in=["confirmed", "processing"]).update(delivery_boy=None)
+
+            log_admin_action(request.user, "delivery_boys", "delete", boy.id, f"Soft-deleted delivery partner {boy.mobile_number} to Recycle Bin", request)
             return JsonResponse({
                 "success": True,
-                "msg": f"Partner account {boy.mobile_number} {'activated' if boy.is_active else 'deactivated'}.",
-                "is_active": boy.is_active,
+                "msg": f"Delivery partner {boy.mobile_number} moved to Recycle Bin. Cash ledgers and past delivery history preserved.",
+                "action": "soft_deleted",
             })
         return JsonResponse({"error": "Invalid action."}, status=400)
 
@@ -1675,35 +1674,23 @@ class AdminProductsAPIView(View):
             return JsonResponse({"error": "Product ID is required."}, status=400)
 
         product = get_object_or_404(Product, id=prod_id)
-
-        # Check if product is tied to customer subscriptions, orders, or plan definitions
-        has_orders = product.orderitem_set.exists()
-        has_subs = product.subscription_set.exists()
-        has_plans = product.subscriptionplan_set.exists()
-
-        if has_orders or has_subs or has_plans:
-            # Safely deactivate instead of deleting to preserve historical records and deliveries
-            product.is_active = False
-            product.save(update_fields=["is_active"])
-            reasons = []
-            if has_orders: reasons.append("order history")
-            if has_subs: reasons.append("customer subscriptions")
-            if has_plans: reasons.append("subscription plans")
-            reason_str = ", ".join(reasons)
-            return JsonResponse({
-                "success": True,
-                "action": "deactivated",
-                "msg": f"Product '{product.name}' has existing {reason_str}. To protect financial & delivery records, it has been deactivated rather than permanently removed.",
-                "is_active": False
-            })
-
-        # Safe to delete if no historical relationships exist
         prod_name = product.name
-        product.delete()
+
+        # Always soft-delete records by default into Recycle Bin
+        product.is_active = False
+        product.delete(deleted_by=request.user if request.user.is_authenticated else None)
+
+        log_admin_action(
+            request.user, "products", "delete", product.id,
+            f"Soft-deleted product '{prod_name}' to Recycle Bin. Historical order items and catalog consistency preserved.",
+            request
+        )
+
         return JsonResponse({
             "success": True,
-            "action": "deleted",
-            "msg": f"Product '{prod_name}' was deleted successfully."
+            "action": "soft_deleted",
+            "msg": f"Product '{prod_name}' moved to Recycle Bin. Historical orders and subscriptions are fully preserved.",
+            "is_active": False,
         })
 
 
@@ -2549,6 +2536,7 @@ class AdminSettingsAPIView(View):
                 SystemSetting(key="delivery_fee", value="0.00", description="Flat delivery fee per drop (₹)"),
                 SystemSetting(key="morning_cutoff_time", value="21:00", description="Evening cutoff time for next-day morning delivery"),
                 SystemSetting(key="cash_reconciliation_notes", value="Physical cash must be verified daily by 8 PM", description="Admin cash policy"),
+                SystemSetting(key="recycle_bin_retention_days", value="30", description="Days to retain soft-deleted records in Recycle Bin before permanent cleanup"),
             ])
 
         search = request.GET.get("search", "").strip()
@@ -3010,6 +2998,388 @@ class AdminDeliverySlotDetailAPIView(View):
                 "is_active": slot.is_active
             })
         return JsonResponse({"error": "Invalid action."}, status=400)
+
+    def delete(self, request, pk):
+        """
+        Safely deletes or deactivates a delivery slot.
+        If customer orders or active subscriptions reference this slot,
+        physical deletion is prevented and the slot is deactivated instead to protect audit history.
+        """
+        slot = get_object_or_404(DeliverySlot, id=pk)
+        orders_count = slot.orders.count()
+        subs_count = slot.subscriptions.count()
+
+        if orders_count > 0 or subs_count > 0:
+            slot.is_active = False
+            slot.save(update_fields=["is_active"])
+            log_admin_action(request.user, "Delivery Slots", "deactivate_on_delete", slot.id, f"Slot {slot.name} deactivated because {orders_count} orders / {subs_count} subscriptions exist", request)
+            return JsonResponse({
+                "success": True,
+                "action": "deactivated",
+                "msg": f"Slot '{slot.name}' has historical orders ({orders_count}) or subscriptions ({subs_count}). It has been safely deactivated from the mobile app to preserve database and financial integrity."
+            })
+
+        slot_name = slot.name
+        slot.delete()
+        log_admin_action(request.user, "Delivery Slots", "delete", pk, f"Permanently removed unused slot {slot_name}", request)
+        return JsonResponse({
+            "success": True,
+            "action": "deleted",
+            "msg": f"Delivery slot '{slot_name}' removed successfully."
+        })
+
+
+# =====================================================================
+# RECYCLE BIN API
+# =====================================================================
+@method_decorator(csrf_exempt, name="dispatch")
+class AdminRecycleBinAPIView(View):
+    """
+    Recycle Bin Management API:
+    - GET: List soft-deleted records across customers, delivery_boys, products, and subscriptions,
+           including deleted timestamp, scheduled purge date, remaining retention days, and deleting admin.
+    - POST: 'restore' to restore a soft-deleted item, or 'permanent_delete' to permanently delete
+            an item after explicit confirmation and safe foreign-key dependency validation.
+    """
+    def get(self, request):
+        entity_type = request.GET.get("type", "all").strip().lower()
+        search = request.GET.get("search", "").strip()
+        from core.soft_delete import get_retention_days
+        retention_days = get_retention_days()
+
+        results = {
+            "retention_days": retention_days,
+            "customers": [],
+            "delivery_boys": [],
+            "products": [],
+            "subscriptions": [],
+            "counts": {
+                "customers": 0,
+                "delivery_boys": 0,
+                "products": 0,
+                "subscriptions": 0,
+                "total": 0,
+            }
+        }
+
+        # 1. Customers
+        cust_qs = User.deleted_objects.filter(role="customer")
+        if search:
+            cust_qs = cust_qs.filter(
+                Q(mobile_number__icontains=search) |
+                Q(first_name__icontains=search) |
+                Q(last_name__icontains=search) |
+                Q(email__icontains=search)
+            )
+        results["counts"]["customers"] = cust_qs.count()
+        if entity_type in ("all", "customers"):
+            for u in cust_qs:
+                p_info = get_person_display(u, "Customer")
+                del_admin = u.deleted_by.username if u.deleted_by else "Admin"
+                sched = u.scheduled_permanent_deletion_date
+                results["customers"].append({
+                    "id": u.id,
+                    "type": "customer",
+                    "type_display": "Customer",
+                    "title": p_info["name"],
+                    "subtitle": u.mobile_number,
+                    "email": u.email or "—",
+                    "deleted_at": u.deleted_at.strftime("%d %b %Y, %I:%M %p") if u.deleted_at else "—",
+                    "deleted_by": del_admin,
+                    "scheduled_permanent_deletion_date": sched.strftime("%d %b %Y, %I:%M %p") if sched else "—",
+                    "remaining_retention_days": u.remaining_retention_days,
+                    "is_eligible_for_purge": u.is_eligible_for_purge,
+                    "orders_count": u.orders.count(),
+                    "wallet_balance": float(u.wallet_balance),
+                })
+
+        # 2. Delivery Partners
+        boy_qs = User.deleted_objects.filter(role="delivery_boy")
+        if search:
+            boy_qs = boy_qs.filter(
+                Q(mobile_number__icontains=search) |
+                Q(first_name__icontains=search) |
+                Q(last_name__icontains=search)
+            )
+        results["counts"]["delivery_boys"] = boy_qs.count()
+        if entity_type in ("all", "delivery_boys"):
+            for b in boy_qs:
+                p_info = get_person_display(b, "Delivery Partner")
+                del_admin = b.deleted_by.username if b.deleted_by else "Admin"
+                sched = b.scheduled_permanent_deletion_date
+                prof = getattr(b, "delivery_profile", None)
+                results["delivery_boys"].append({
+                    "id": b.id,
+                    "type": "delivery_boy",
+                    "type_display": "Delivery Partner",
+                    "title": p_info["name"],
+                    "subtitle": b.mobile_number,
+                    "zone": prof.zone if prof else "No Zone",
+                    "vehicle": prof.vehicle_number if prof else "—",
+                    "deleted_at": b.deleted_at.strftime("%d %b %Y, %I:%M %p") if b.deleted_at else "—",
+                    "deleted_by": del_admin,
+                    "scheduled_permanent_deletion_date": sched.strftime("%d %b %Y, %I:%M %p") if sched else "—",
+                    "remaining_retention_days": b.remaining_retention_days,
+                    "is_eligible_for_purge": b.is_eligible_for_purge,
+                })
+
+        # 3. Products
+        prod_qs = Product.deleted_objects.all().select_related("category", "deleted_by")
+        if search:
+            prod_qs = prod_qs.filter(
+                Q(name__icontains=search) |
+                Q(category__name__icontains=search)
+            )
+        results["counts"]["products"] = prod_qs.count()
+        if entity_type in ("all", "products"):
+            for p in prod_qs:
+                del_admin = p.deleted_by.username if p.deleted_by else "Admin"
+                sched = p.scheduled_permanent_deletion_date
+                order_items_count = p.orderitem_set.count()
+                subs_count = p.subscriptions.count()
+                results["products"].append({
+                    "id": p.id,
+                    "type": "product",
+                    "type_display": "Product",
+                    "title": p.name,
+                    "subtitle": f"₹{p.price:.2f} / {p.get_unit_display()}",
+                    "category": p.category.name if p.category else "Uncategorized",
+                    "deleted_at": p.deleted_at.strftime("%d %b %Y, %I:%M %p") if p.deleted_at else "—",
+                    "deleted_by": del_admin,
+                    "scheduled_permanent_deletion_date": sched.strftime("%d %b %Y, %I:%M %p") if sched else "—",
+                    "remaining_retention_days": p.remaining_retention_days,
+                    "is_eligible_for_purge": p.is_eligible_for_purge,
+                    "order_items_count": order_items_count,
+                    "subscriptions_count": subs_count,
+                    "has_financial_history": (order_items_count > 0 or subs_count > 0),
+                })
+
+        # 4. Subscriptions
+        sub_qs = Subscription.deleted_objects.all().select_related("user", "product", "plan", "deleted_by")
+        if search:
+            sub_qs = sub_qs.filter(
+                Q(user__mobile_number__icontains=search) |
+                Q(product__name__icontains=search)
+            )
+        results["counts"]["subscriptions"] = sub_qs.count()
+        if entity_type in ("all", "subscriptions"):
+            for s in sub_qs:
+                del_admin = s.deleted_by.username if s.deleted_by else "Admin"
+                sched = s.scheduled_permanent_deletion_date
+                cust_info = get_person_display(s.user, "Customer")
+                fulfilled_drops = s.daily_deliveries.exclude(status="pending").count()
+                results["subscriptions"].append({
+                    "id": s.id,
+                    "type": "subscription",
+                    "type_display": "Subscription",
+                    "title": f"Sub #{s.id} - {s.product.name} x{s.quantity}L",
+                    "subtitle": f"Customer: {cust_info['name']} ({s.user.mobile_number})",
+                    "status": s.status,
+                    "start_date": s.start_date.strftime("%d %b %Y") if s.start_date else "—",
+                    "end_date": s.end_date.strftime("%d %b %Y") if s.end_date else "—",
+                    "deleted_at": s.deleted_at.strftime("%d %b %Y, %I:%M %p") if s.deleted_at else "—",
+                    "deleted_by": del_admin,
+                    "scheduled_permanent_deletion_date": sched.strftime("%d %b %Y, %I:%M %p") if sched else "—",
+                    "remaining_retention_days": s.remaining_retention_days,
+                    "is_eligible_for_purge": s.is_eligible_for_purge,
+                    "fulfilled_drops": fulfilled_drops,
+                    "has_financial_history": (fulfilled_drops > 0 or s.payments.exists()),
+                })
+
+        results["counts"]["total"] = (
+            results["counts"]["customers"] +
+            results["counts"]["delivery_boys"] +
+            results["counts"]["products"] +
+            results["counts"]["subscriptions"]
+        )
+
+        return JsonResponse(results)
+
+    def post(self, request):
+        try:
+            body = json.loads(request.body.decode("utf-8") or "{}")
+        except Exception:
+            body = {}
+
+        action = body.get("action", "").strip().lower()
+        entity_type = body.get("type", "").strip().lower()
+        entity_id = body.get("id")
+
+        if not action or not entity_type or not entity_id:
+            return JsonResponse({"error": "Fields 'action', 'type', and 'id' are required."}, status=400)
+
+        # Permission check: ensure staff/superuser or authorized admin
+        if request.user.is_authenticated and not (request.user.is_staff or request.user.is_superuser or request.user.role == "admin"):
+            return JsonResponse({"error": "Permission denied. Only authorized administrators can restore or permanently delete items."}, status=403)
+
+        # -------------------------------------------------------------
+        # RESTORE ACTION
+        # -------------------------------------------------------------
+        if action == "restore":
+            if entity_type == "customer":
+                item = User.deleted_objects.filter(id=entity_id, role="customer").first()
+                if not item:
+                    return JsonResponse({"error": "Deleted customer not found."}, status=404)
+                item.restore()
+                log_admin_action(request.user, "recycle_bin", "restore", item.id, f"Restored customer {item.mobile_number}", request)
+                return JsonResponse({"success": True, "msg": f"Customer {item.mobile_number} restored successfully."})
+
+            elif entity_type == "delivery_boy":
+                item = User.deleted_objects.filter(id=entity_id, role="delivery_boy").first()
+                if not item:
+                    return JsonResponse({"error": "Deleted delivery partner not found."}, status=404)
+                item.restore()
+                prof, _ = DeliveryBoyProfile.objects.get_or_create(user=item)
+                prof.is_available = True
+                prof.save(update_fields=["is_available"])
+                log_admin_action(request.user, "recycle_bin", "restore", item.id, f"Restored delivery partner {item.mobile_number}", request)
+                return JsonResponse({"success": True, "msg": f"Delivery partner {item.mobile_number} restored successfully."})
+
+            elif entity_type == "product":
+                item = Product.deleted_objects.filter(id=entity_id).first()
+                if not item:
+                    return JsonResponse({"error": "Deleted product not found."}, status=404)
+                item.restore()
+                item.is_active = True
+                item.save(update_fields=["is_active"])
+                log_admin_action(request.user, "recycle_bin", "restore", item.id, f"Restored product '{item.name}'", request)
+                return JsonResponse({"success": True, "msg": f"Product '{item.name}' restored successfully to product catalog."})
+
+            elif entity_type == "subscription":
+                item = Subscription.deleted_objects.filter(id=entity_id).first()
+                if not item:
+                    return JsonResponse({"error": "Deleted subscription not found."}, status=404)
+                item.restore()
+                # Status set back to paused for admin review or active if within dates
+                today = timezone.localdate()
+                if item.start_date <= today <= item.end_date:
+                    item.status = "active"
+                else:
+                    item.status = "paused"
+                item.save(update_fields=["status"])
+                log_admin_action(request.user, "recycle_bin", "restore", item.id, f"Restored subscription #{item.id}", request)
+                return JsonResponse({"success": True, "msg": f"Subscription #{item.id} restored successfully (status: {item.status})."})
+
+            else:
+                return JsonResponse({"error": f"Unsupported entity type '{entity_type}'."}, status=400)
+
+        # -------------------------------------------------------------
+        # PERMANENT DELETE ACTION (Hard delete with FK safety & Admin Password Auth)
+        # -------------------------------------------------------------
+        elif action == "permanent_delete":
+            confirm = body.get("confirmed", False)
+            if not confirm:
+                return JsonResponse({
+                    "error": "Explicit confirmation required for permanent deletion. Please send 'confirmed: true'."
+                }, status=400)
+
+            # Strict backend-verified admin password check
+            admin_password = body.get("admin_password", "")
+            if not admin_password:
+                return JsonResponse({
+                    "error": "Admin authorization password is required for permanent deletion."
+                }, status=400)
+
+            if not request.user.is_authenticated or not request.user.check_password(admin_password):
+                return JsonResponse({
+                    "error": "Invalid administrator password. Destructive permanent deletion was rejected."
+                }, status=403)
+
+            if entity_type == "customer":
+                item = User.deleted_objects.filter(id=entity_id, role="customer").first()
+                if not item:
+                    return JsonResponse({"error": "Deleted customer not found."}, status=404)
+
+                # Explicit Foreign Key Dependency Guard:
+                # Do NOT cascade-delete or corrupt financial / audit / order records
+                has_orders = item.orders.exists()
+                has_payments = item.payments.exists()
+                has_collections = OfflinePaymentCollection.objects.filter(order__user=item).exists()
+                if has_orders or has_payments or has_collections:
+                    return JsonResponse({
+                        "error": f"Cannot permanently delete customer {item.mobile_number}: Account has historical orders, payments, or cash collection audit records. These records must be preserved for financial auditing. The record remains safely archived in the Recycle Bin.",
+                        "blocked_reason": "financial_integrity"
+                    }, status=400)
+
+                # Clean non-critical ancillary records safely
+                item.notifications.all().delete()
+                item.addresses.all().delete()
+                item.device_tokens.all().delete()
+                mob = item.mobile_number
+                item.hard_delete()
+                log_admin_action(request.user, "recycle_bin", "permanent_delete", entity_id, f"Permanently deleted customer {mob} from database", request)
+                return JsonResponse({"success": True, "msg": f"Customer {mob} permanently deleted."})
+
+            elif entity_type == "delivery_boy":
+                item = User.deleted_objects.filter(id=entity_id, role="delivery_boy").first()
+                if not item:
+                    return JsonResponse({"error": "Deleted delivery partner not found."}, status=404)
+
+                # Explicit Foreign Key Dependency Guard:
+                has_collections = OfflinePaymentCollection.objects.filter(delivery_partner=item).exists()
+                has_handovers = CashHandover.objects.filter(delivery_boy=item).exists()
+                has_deliveries = DailyDelivery.objects.filter(delivery_boy=item).exclude(status="pending").exists()
+                if has_collections or has_handovers or has_deliveries:
+                    return JsonResponse({
+                        "error": f"Cannot permanently delete delivery partner {item.mobile_number}: Partner is linked to completed deliveries, cash handovers, or payment collection receipts. Physical destruction would corrupt the cash ledger. Record remains safely archived.",
+                        "blocked_reason": "financial_integrity"
+                    }, status=400)
+
+                # Clean DeliveryBoyProfile
+                DeliveryBoyProfile.objects.filter(user=item).delete()
+                mob = item.mobile_number
+                item.hard_delete()
+                log_admin_action(request.user, "recycle_bin", "permanent_delete", entity_id, f"Permanently deleted partner {mob} from database", request)
+                return JsonResponse({"success": True, "msg": f"Delivery partner {mob} permanently deleted."})
+
+            elif entity_type == "product":
+                item = Product.deleted_objects.filter(id=entity_id).first()
+                if not item:
+                    return JsonResponse({"error": "Deleted product not found."}, status=404)
+
+                # Explicit Foreign Key Dependency Guard:
+                has_order_items = item.orderitem_set.exists()
+                has_subscriptions = item.subscriptions.exists()
+                if has_order_items or has_subscriptions:
+                    return JsonResponse({
+                        "error": f"Cannot permanently delete product '{item.name}': Historical orders or customer subscriptions reference this product. Physical destruction would violate database integrity or delete historical purchase receipts. It will remain permanently archived in the Recycle Bin.",
+                        "blocked_reason": "financial_integrity"
+                    }, status=400)
+
+                # Clean product images if any
+                item.images.all().delete()
+                prod_name = item.name
+                item.hard_delete()
+                log_admin_action(request.user, "recycle_bin", "permanent_delete", entity_id, f"Permanently deleted product '{prod_name}'", request)
+                return JsonResponse({"success": True, "msg": f"Product '{prod_name}' permanently deleted."})
+
+            elif entity_type == "subscription":
+                item = Subscription.deleted_objects.filter(id=entity_id).first()
+                if not item:
+                    return JsonResponse({"error": "Deleted subscription not found."}, status=404)
+
+                # Explicit Foreign Key Dependency Guard:
+                has_fulfilled_drops = item.daily_deliveries.exclude(status="pending").exists()
+                has_payments = item.payments.exists()
+                if has_fulfilled_drops or has_payments:
+                    return JsonResponse({
+                        "error": f"Cannot permanently delete subscription #{item.id}: Fulfilled daily drops or financial payments exist for this subscription. Deleting it would destroy delivery and audit history. It will remain archived safely.",
+                        "blocked_reason": "financial_integrity"
+                    }, status=400)
+
+                # Clean any remaining pending drops
+                item.daily_deliveries.all().delete()
+                sub_id = item.id
+                item.hard_delete()
+                log_admin_action(request.user, "recycle_bin", "permanent_delete", sub_id, f"Permanently deleted subscription #{sub_id}", request)
+                return JsonResponse({"success": True, "msg": f"Subscription #{sub_id} permanently deleted."})
+
+            else:
+                return JsonResponse({"error": f"Unsupported entity type '{entity_type}'."}, status=400)
+
+        else:
+            return JsonResponse({"error": f"Unknown action '{action}'."}, status=400)
+
 
 
 
